@@ -26,6 +26,7 @@ import PredictiveBVH.Protocol.AbyssalSLA
 
 -- Relativistic zone theory (no ego, no god, no determinism)
 import PredictiveBVH.Relativistic.NoGod
+import PredictiveBVH.Relativistic.ReBAC
 
 -- Resources
 import PredictiveBVH.Formulas.Resources

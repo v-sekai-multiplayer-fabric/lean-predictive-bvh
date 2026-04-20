@@ -4,6 +4,9 @@
 import PredictiveBVH.Primitives.Types
 import PredictiveBVH.Formulas.Formula
 import PredictiveBVH.Protocol.Fabric
+import PredictiveBVH.Relativistic.NoGod
+
+open PredictiveBVH.Relativistic
 
 -- ============================================================================
 -- AUTHORITY / INTEREST SEPARATION
@@ -35,6 +38,12 @@ import PredictiveBVH.Protocol.Fabric
 --   Ghost replicas do NOT consume authority slots.
 --   Zone B can hold interest in hundreds of border entities while keeping
 --   all MIGRATION_HEADROOM slots free for incoming authority transfers.
+--
+-- Clock regime:
+--   Interest replicas now carry sentAt : VClock n (causal vector clock) via
+--   RelReplica n from NoGod.lean.  This replaces the god-clock scalar
+--   lastTick : Nat (original) and the intermediate sentAt : HLC.
+--   Staleness is RelReplica.stale — causal, not wall-clock.
 -- ============================================================================
 
 -- ── Interest registration threshold ──────────────────────────────────────────
@@ -53,32 +62,18 @@ def InterestCapacity : Nat := 400
 
 -- ── Record types ─────────────────────────────────────────────────────────────
 
-/-- An interest replica: a read-only ghost of an entity whose authority
-    remains on a different zone.  Carries enough state to serve
-    CH_INTEREST snapshots to nearby players. -/
-structure InterestReplica where
-  entityId   : Nat     -- stable across authority transfers
-  authorZone : Nat     -- zone currently running physics for this entity
-  posX       : Int     -- last known position X (μm)
-  posY       : Int     -- last known position Y (μm)
-  posZ       : Int     -- last known position Z (μm)
-  velX       : Int     -- last known velocity X (μm/tick)
-  velY       : Int     -- last known velocity Y (μm/tick)
-  velZ       : Int     -- last known velocity Z (μm/tick)
-  accX       : Int     -- last known acceleration X (μm/tick²)
-  accY       : Int     -- last known acceleration Y (μm/tick²)
-  accZ       : Int     -- last known acceleration Z (μm/tick²)
-  lastTick   : Nat     -- tick at which this replica was last refreshed
-  deriving Inhabited, Repr
+-- Interest replicas are now RelReplica n (from NoGod.lean).
+-- sentAt : VClock n is the causal timestamp; staleness is RelReplica.stale.
 
 /-- Zone state extended with an interest replica buffer.
     `entities`  = indices of entities with AUTHORITY on this zone.
-    `replicas`  = interest replicas of entities whose authority is elsewhere. -/
-structure ZoneStateAI where
+    `replicas`  = interest replicas (RelReplica n) of entities whose authority
+                  is elsewhere; each carries a VClock causal timestamp. -/
+structure ZoneStateAI (n : Nat) where
   id        : Nat
   volume    : BoundingBox
-  entities  : Array Nat          -- authority-holding entity indices
-  replicas  : Array InterestReplica  -- interest replicas (no authority)
+  entities  : Array Nat
+  replicas  : Array (RelReplica n)
   deriving Inhabited
 
 -- ── Interest eligibility ──────────────────────────────────────────────────────
@@ -89,38 +84,37 @@ def overlapsAxis (pos vel acc_half : Int) (k : Nat) (zMin zMax : Int) : Bool :=
   let expand : Int := Int.ofNat (ghostBound vel.toNat acc_half.toNat k)
   pos - expand ≤ zMax && pos + expand ≥ zMin
 
-/-- True when an entity's k-tick expansion box overlaps a zone's bounding box. -/
-def inInterestRange (r : InterestReplica) (zVol : BoundingBox) (k : Nat) : Bool :=
+/-- True when a RelReplica's k-tick expansion box overlaps a zone's bounding box. -/
+def inInterestRange {n : Nat} (r : RelReplica n) (zVol : BoundingBox) (k : Nat) : Bool :=
   overlapsAxis r.posX r.velX r.accX k zVol.minX zVol.maxX &&
   overlapsAxis r.posY r.velY r.accY k zVol.minY zVol.maxY &&
   overlapsAxis r.posZ r.velZ r.accZ k zVol.minZ zVol.maxZ
 
 -- ── Ghost eviction ───────────────────────────────────────────────────────────
 
-/-- An interest replica expires if not refreshed within 2 × latency ticks.
-    The authority zone stops sending ghost updates once entity leaves
-    interest range, so the replica naturally ages out. -/
-def replicaExpired (r : InterestReplica) (currentTick : Nat) (latency : Nat) : Bool :=
-  currentTick ≥ r.lastTick + 2 * latency
+/-- A replica is stale when the local VClock has advanced past the authority
+    node's component in sentAt.  Pure causal ordering; no wall-clock timeout. -/
+def replicaStale {n : Nat} (r : RelReplica n) (clock : VClock n) (authorIdx : Fin n) : Bool :=
+  r.stale clock authorIdx
 
 /-- Evict stale replicas from a zone's interest buffer. -/
-def evictReplicas (z : ZoneStateAI) (currentTick latency : Nat) : ZoneStateAI :=
-  { z with replicas := z.replicas.filter (fun rep => !replicaExpired rep currentTick latency) }
+def evictReplicas {n : Nat} (z : ZoneStateAI n) (clock : VClock n) (authorIdx : Fin n) : ZoneStateAI n :=
+  { z with replicas := z.replicas.filter (fun rep => !replicaStale rep clock authorIdx) }
 
 -- ── Capacity invariants ───────────────────────────────────────────────────────
 
 /-- Authority slot count is always bounded by zone capacity minus headroom.
     This is the invariant that must hold for migration bursts to succeed. -/
-def authorityWithinCap (z : ZoneStateAI) (cap headroom : Nat) : Prop :=
+def authorityWithinCap {n : Nat} (z : ZoneStateAI n) (cap headroom : Nat) : Prop :=
   z.entities.size ≤ cap - headroom
 
 /-- Interest replica count is bounded by InterestCapacity (separate budget). -/
-def interestWithinCap (z : ZoneStateAI) : Prop :=
+def interestWithinCap {n : Nat} (z : ZoneStateAI n) : Prop :=
   z.replicas.size ≤ InterestCapacity
 
 /-- The combined invariant: authority and interest are independent budgets.
     Authority does NOT consume interest slots and vice versa. -/
-def zoneCapacityOk (z : ZoneStateAI) (cap headroom : Nat) : Prop :=
+def zoneCapacityOk {n : Nat} (z : ZoneStateAI n) (cap headroom : Nat) : Prop :=
   authorityWithinCap z cap headroom ∧ interestWithinCap z
 
 -- ── Ghost update protocol ─────────────────────────────────────────────────────
@@ -129,7 +123,7 @@ def zoneCapacityOk (z : ZoneStateAI) (cap headroom : Nat) : Prop :=
     e's k-tick expansion overlaps zone B's volume AND e is not yet staging.
     This is distinct from a migration intent (authority transfer).
     Ghost updates carry no authority — zone B stores them as interest replicas. -/
-def shouldSendGhost (r : InterestReplica) (zBVol : BoundingBox)
+def shouldSendGhost {n : Nat} (r : RelReplica n) (zBVol : BoundingBox)
     (migState : MigrationState) (k : Nat) : Bool :=
   match migState with
   | .staging _ _ => false  -- already in authority-transfer path; ghost not needed
@@ -139,7 +133,7 @@ def shouldSendGhost (r : InterestReplica) (zBVol : BoundingBox)
 /-- When zone B receives a ghost update, it upserts into the replica buffer.
     Returns updated zone or unchanged if replica buffer is full.
     Split into an aux function so proofs can case-split on the Option cleanly. -/
-private def receiveGhostAux (z : ZoneStateAI) (r : InterestReplica) (existing : Option Nat) : ZoneStateAI :=
+private def receiveGhostAux {n : Nat} (z : ZoneStateAI n) (r : RelReplica n) (existing : Option Nat) : ZoneStateAI n :=
   match existing with
   | some i => { z with replicas := z.replicas.set! i r }
   | none   =>
@@ -148,9 +142,9 @@ private def receiveGhostAux (z : ZoneStateAI) (r : InterestReplica) (existing : 
     else
       z  -- buffer full; ghost dropped (entity not yet in authority path)
 
-def receiveGhost (z : ZoneStateAI) (r : InterestReplica) : ZoneStateAI :=
+def receiveGhost {n : Nat} (z : ZoneStateAI n) (r : RelReplica n) : ZoneStateAI n :=
   receiveGhostAux z r
-    (z.replicas.findIdx? (fun (x : InterestReplica) => x.entityId == r.entityId))
+    (z.replicas.findIdx? (fun (x : RelReplica n) => x.entityId == r.entityId))
 
 -- ── Authority transfer invariant ─────────────────────────────────────────────
 
@@ -160,22 +154,22 @@ def receiveGhost (z : ZoneStateAI) (r : InterestReplica) : ZoneStateAI :=
     - if slot available: replica is promoted to authority, removed from replicas
     This is the key invariant: interest replicas do NOT consume authority slots,
     so MIGRATION_HEADROOM slots remain available for the authority transfer. -/
-def canAcceptAuthority (z : ZoneStateAI) (cap headroom : Nat) : Bool :=
+def canAcceptAuthority {n : Nat} (z : ZoneStateAI n) (cap headroom : Nat) : Bool :=
   z.entities.size < cap - headroom
 
 /-- Promote an interest replica to authority when STAGING completes.
     If a replica exists for this entity, remove it (authority supersedes interest).
     Then add entity index to the authority array. -/
-def promoteToAuthority (z : ZoneStateAI) (entityId entityIdx : Nat) : ZoneStateAI :=
+def promoteToAuthority {n : Nat} (z : ZoneStateAI n) (entityId entityIdx : Nat) : ZoneStateAI n :=
   let withoutReplica := { z with
-    replicas := z.replicas.filter (fun (rep : InterestReplica) => rep.entityId != entityId) }
+    replicas := z.replicas.filter (fun (rep : RelReplica n) => rep.entityId != entityId) }
   { withoutReplica with
     entities := withoutReplica.entities.push entityIdx }
 
 -- ── Key theorem: interest does not crowd out authority ────────────────────────
 
 /-- The aux function never modifies the authority entity list. -/
-theorem receiveGhostAux_entities_unchanged (z : ZoneStateAI) (r : InterestReplica) (e : Option Nat) :
+theorem receiveGhostAux_entities_unchanged {n : Nat} (z : ZoneStateAI n) (r : RelReplica n) (e : Option Nat) :
     (receiveGhostAux z r e).entities = z.entities := by
   unfold receiveGhostAux
   cases e with
@@ -186,14 +180,14 @@ theorem receiveGhostAux_entities_unchanged (z : ZoneStateAI) (r : InterestReplic
     · rw [if_neg h]
 
 /-- receiveGhost never modifies the authority entity list. -/
-theorem receiveGhost_entities_unchanged (z : ZoneStateAI) (r : InterestReplica) :
+theorem receiveGhost_entities_unchanged {n : Nat} (z : ZoneStateAI n) (r : RelReplica n) :
     (receiveGhost z r).entities = z.entities :=
   receiveGhostAux_entities_unchanged z r _
 
 /-- Ghost updates cannot consume authority slots.
     If zone B is within capacity, receiving a ghost update leaves it within capacity. -/
 theorem ghost_does_not_consume_authority_slot
-    (z : ZoneStateAI) (r : InterestReplica) (cap headroom : Nat)
+    {n : Nat} (z : ZoneStateAI n) (r : RelReplica n) (cap headroom : Nat)
     (h : authorityWithinCap z cap headroom) :
     authorityWithinCap (receiveGhost z r) cap headroom := by
   unfold authorityWithinCap
@@ -202,25 +196,25 @@ theorem ghost_does_not_consume_authority_slot
 
 /-- Authority transfers (promoteToAuthority) increase authority count by exactly 1. -/
 theorem promote_increases_authority
-    (z : ZoneStateAI) (eid idx : Nat) :
+    {n : Nat} (z : ZoneStateAI n) (eid idx : Nat) :
     (promoteToAuthority z eid idx).entities.size = z.entities.size + 1 := by
   simp [promoteToAuthority, Array.size_push]
 
 -- ── Remaining invariant closures ─────────────────────────────────────────────
 
 /-- evictReplicas only touches the replica list; authority entities are unchanged. -/
-theorem evictReplicas_entities_unchanged (z : ZoneStateAI) (currentTick latency : Nat) :
-    (evictReplicas z currentTick latency).entities = z.entities := by
+theorem evictReplicas_entities_unchanged {n : Nat} (z : ZoneStateAI n) (clock : VClock n) (authorIdx : Fin n) :
+    (evictReplicas z clock authorIdx).entities = z.entities := by
   simp [evictReplicas]
 
 /-- canAcceptAuthority (Bool) reflects the strict-less-than authority guard (Prop). -/
-theorem canAcceptAuthority_iff (z : ZoneStateAI) (cap headroom : Nat) :
+theorem canAcceptAuthority_iff {n : Nat} (z : ZoneStateAI n) (cap headroom : Nat) :
     canAcceptAuthority z cap headroom = true ↔ z.entities.size < cap - headroom := by
   simp [canAcceptAuthority]
 
 /-- Accepting authority while the Bool guard holds preserves authorityWithinCap.
     After promoteToAuthority, size = old_size + 1 ≤ cap - headroom. -/
-theorem promote_preserves_authority_cap (z : ZoneStateAI) (eid idx cap headroom : Nat)
+theorem promote_preserves_authority_cap {n : Nat} (z : ZoneStateAI n) (eid idx cap headroom : Nat)
     (h : canAcceptAuthority z cap headroom = true) :
     authorityWithinCap (promoteToAuthority z eid idx) cap headroom := by
   rw [canAcceptAuthority_iff] at h
@@ -228,7 +222,7 @@ theorem promote_preserves_authority_cap (z : ZoneStateAI) (eid idx cap headroom 
   omega
 
 /-- promoteToAuthority filters replicas (can only shrink), so interestWithinCap is preserved. -/
-theorem promote_preserves_interest_cap (z : ZoneStateAI) (eid idx : Nat)
+theorem promote_preserves_interest_cap {n : Nat} (z : ZoneStateAI n) (eid idx : Nat)
     (h : interestWithinCap z) :
     interestWithinCap (promoteToAuthority z eid idx) := by
   unfold interestWithinCap promoteToAuthority
@@ -239,17 +233,14 @@ theorem promote_preserves_interest_cap (z : ZoneStateAI) (eid idx : Nat)
     Update path: set! keeps size identical.
     Insert path: push only fires when size < InterestCapacity, so result ≤ InterestCapacity.
     Drop path: buffer full, zone unchanged. -/
-theorem receiveGhost_preserves_interest_cap (z : ZoneStateAI) (r : InterestReplica)
+theorem receiveGhost_preserves_interest_cap {n : Nat} (z : ZoneStateAI n) (r : RelReplica n)
     (h : interestWithinCap z) :
     interestWithinCap (receiveGhost z r) := by
   simp only [interestWithinCap] at h ⊢
   unfold receiveGhost receiveGhostAux
-  -- split on the match in the goal; each branch is iota-reduced automatically
   split
-  · -- some i: set! updates in place, size unchanged
-    simp; exact h
-  · -- none: push (if room) or drop (if full)
-    by_cases hc : z.replicas.size < InterestCapacity
+  · simp; exact h
+  · by_cases hc : z.replicas.size < InterestCapacity
     · simp [if_pos hc, Array.size_push]; omega
     · simp [if_neg hc]; exact h
 
@@ -284,7 +275,7 @@ def separatedConcertFits (localCount remoteCount cap headroom : Nat) : Prop :=
     authority AND InterestCapacity performers as interest replicas simultaneously.
     Total visible = authority + interest ≤ (cap - headroom) + InterestCapacity.
     The naive baseline would cap the whole sum at (cap - headroom). -/
-theorem separation_total_capacity (z : ZoneStateAI) (cap headroom : Nat)
+theorem separation_total_capacity {n : Nat} (z : ZoneStateAI n) (cap headroom : Nat)
     (h : zoneCapacityOk z cap headroom) :
     z.entities.size + z.replicas.size ≤ (cap - headroom) + InterestCapacity :=
   Nat.add_le_add h.1 h.2
@@ -330,13 +321,13 @@ theorem concert_coexistence (lo re cap headroom : Nat)
 -- lives, not a property of the entity itself.
 
 /-- After promotion, the promoted entity's id does not appear in replicas. -/
-theorem promote_removes_replica (z : ZoneStateAI) (eid idx : Nat) :
+theorem promote_removes_replica {n : Nat} (z : ZoneStateAI n) (eid idx : Nat) :
     ¬ (promoteToAuthority z eid idx).replicas.any (fun r => r.entityId == eid) := by
   simp [promoteToAuthority, Array.any_filter]
 
 /-- Ghost receive never adds an entity to the authority list;
     the entity remains a replica (interest), not an authority, after receiveGhost. -/
-theorem ghost_stays_replica (z : ZoneStateAI) (r : InterestReplica) :
+theorem ghost_stays_replica {n : Nat} (z : ZoneStateAI n) (r : RelReplica n) :
     (receiveGhost z r).entities = z.entities :=
   receiveGhost_entities_unchanged z r
 
@@ -406,7 +397,6 @@ theorem optimalZoneCount_covers (peak target : Nat) (ht : 0 < target) :
     computeOptimalZoneCount peak target * target ≥ peak := by
   unfold computeOptimalZoneCount
   generalize hq_def : (peak + target - 1) / target = q
-  -- Nat.lt_mul_div_succ: a < b * (a / b + 1)
   have hlt : peak + target - 1 < q * target + target := by
     have h := Nat.lt_mul_div_succ (peak + target - 1) ht
     rw [hq_def, Nat.mul_add, Nat.mul_one, Nat.mul_comm] at h

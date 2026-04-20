@@ -2,6 +2,7 @@
 -- Copyright (c) 2026-present K. S. Ernest (iFire) Lee
 
 import PredictiveBVH.Primitives.Types
+import PredictiveBVH.Relativistic.NoGod
 import AmoLean.Field.GF2
 
 /-!
@@ -298,6 +299,10 @@ structure Intent where
   accY : Int
   accZ : Int
   deriving Repr, BEq, Inhabited
+
+/-- Convert Intent's wire-format arrival tick to an HLC (logical counter is 0 for
+    wire-format epochs; the physical component carries the tick count). -/
+def Intent.toArrivalHLC (i : Intent) : HLC := { pt := i.arrivalTick, l := 0 }
 
 /-- Pack an intent into a list of field values (abstract serialization).
     The concrete byte-level encoding (LE, 88 bytes) is in Rust;

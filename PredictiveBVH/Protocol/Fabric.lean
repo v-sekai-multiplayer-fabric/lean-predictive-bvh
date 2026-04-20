@@ -3,6 +3,7 @@
 
 import PredictiveBVH.Primitives.Types
 import PredictiveBVH.Spatial.HilbertBroadphase
+import PredictiveBVH.Relativistic.NoGod
 
 -- Import clz30 from Types (moved there for O(N+k) broadphase)
 -- clz30 is defined in Types.lean now
@@ -46,7 +47,7 @@ theorem maxZoneCount : (1 <<< 30) = 1073741824 := by rfl
 -- #snippet MigrationState
 inductive MigrationState where
   | owned
-  | staging (targetZone : Nat) (arrivalTick : Nat)
+  | staging (targetZone : Nat) (arrivalHLC : HLC)
   | incoming (fromZone : Nat)
   deriving Inhabited, Repr
 -- #end MigrationState
@@ -240,7 +241,7 @@ structure EntityMigInfo where
     Returns updated migration info array + count of new migrations this tick. -/
 def processMigrations (migInfo : Array EntityMigInfo) (zones : Array ZoneState)
     (positions : Array (Int × Int × Int)) (latency : FabricLatency)
-    (currentTick : Nat) : Array EntityMigInfo × Nat :=
+    (currentHLC : HLC) : Array EntityMigInfo × Nat :=
   let lat := latency.toTicks
   (List.range migInfo.size).foldl (fun (acc, newMigs) i =>
     let mi := acc[i]!
@@ -252,16 +253,16 @@ def processMigrations (migInfo : Array EntityMigInfo) (zones : Array ZoneState)
         -- Entity crossed boundary, start hysteresis counter
         let hyst := mi.hysteresis + 1
         if hyst ≥ hysteresisThreshold then
-          -- Begin STAGING
-          let mi' := { mi with migState := .staging targetZone (currentTick + lat),
+          -- Begin STAGING: arrival is lat physical ticks from now
+          let mi' := { mi with migState := .staging targetZone { pt := currentHLC.pt + lat, l := 0 },
                                 hysteresis := 0 }
           (acc.set! i mi', newMigs + 1)
         else
           (acc.set! i { mi with hysteresis := hyst }, newMigs)
       else
         (acc.set! i { mi with hysteresis := 0 }, newMigs)
-    | .staging target arrivalTick =>
-      if currentTick ≥ arrivalTick then
+    | .staging target arrivalHLC =>
+      if HLC.leb arrivalHLC currentHLC then
         -- STAGING complete: transfer authority to target zone
         let mi' := { zone := target, migState := .owned, hysteresis := 0 }
         (acc.set! i mi', newMigs)
