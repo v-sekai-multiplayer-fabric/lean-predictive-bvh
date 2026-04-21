@@ -302,7 +302,8 @@ structure Intent where
 
 /-- Convert Intent's wire-format arrival tick to an HLC (logical counter is 0 for
     wire-format epochs; the physical component carries the tick count). -/
-def Intent.toArrivalHLC (i : Intent) : HLC := { pt := i.arrivalTick, l := 0 }
+def Intent.toArrivalHLC (i : Intent) : PredictiveBVH.Relativistic.HLC :=
+  { pt := i.arrivalTick, l := 0 }
 
 /-- Pack an intent into a list of field values (abstract serialization).
     The concrete byte-level encoding (LE, 88 bytes) is in Rust;

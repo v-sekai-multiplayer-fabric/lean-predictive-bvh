@@ -31,6 +31,11 @@ import PredictiveBVH.Relativistic.ReBAC
 -- Resources
 import PredictiveBVH.Formulas.Resources
 
+-- Adapter formalization (bridges to predictive_bvh_adapter.h)
+import PredictiveBVH.Codegen.RingOps
+import PredictiveBVH.Spatial.BucketDir
+import PredictiveBVH.Spatial.HilbertCell
+
 -- Code generation pipeline
 import PredictiveBVH.Codegen.QuinticHermite
 import PredictiveBVH.Codegen.TreeC

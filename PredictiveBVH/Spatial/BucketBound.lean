@@ -24,11 +24,9 @@ def ceilLog2 : Nat → Nat
   | 0 => 0
   | 1 => 0
   | n + 2 =>
-      -- Ceil-log2 of (n+2) = 1 + ceil-log2(ceil((n+2)/2))
       1 + ceilLog2 ((n + 2 + 1) / 2)
   decreasing_by
-    simp_wf
-    omega
+    simp_wf; omega
 
 /-- Auto-tuned bucket bit-count for `n` leaves. -/
 def bucketBitsFor (n : Nat) : Nat :=
@@ -43,46 +41,42 @@ theorem ceilLog2_spec : ∀ n, n ≤ 2 ^ ceilLog2 n
   | 0 => by simp [ceilLog2]
   | 1 => by simp [ceilLog2]
   | n + 2 => by
-      unfold ceilLog2
+      simp only [ceilLog2]
       have ih : (n + 2 + 1) / 2 ≤ 2 ^ ceilLog2 ((n + 2 + 1) / 2) :=
         ceilLog2_spec ((n + 2 + 1) / 2)
-      have h2 : n + 2 ≤ 2 * ((n + 2 + 1) / 2) := by omega
-      have h3 : 2 * ((n + 2 + 1) / 2) ≤ 2 * 2 ^ ceilLog2 ((n + 2 + 1) / 2) := by
-        exact Nat.mul_le_mul_left 2 ih
       have h4 : 2 ^ (1 + ceilLog2 ((n + 2 + 1) / 2))
                   = 2 * 2 ^ ceilLog2 ((n + 2 + 1) / 2) := by
-        rw [Nat.pow_add]; simp [Nat.pow_one, Nat.mul_comm]
-      rw [h4]; omega
+        rw [Nat.pow_add, Nat.pow_one]
+      rw [h4]
+      exact Nat.le_trans (by omega) (Nat.mul_le_mul_left 2 ih)
 
 /-- Core average-bucket bound: `N ≤ K_target · 2^(bucketBitsFor N)`. -/
 theorem avg_bucket_bound (n : Nat) :
     n ≤ kTarget * 2 ^ bucketBitsFor n := by
-  unfold bucketBitsFor
   by_cases hle : n ≤ kTarget
-  · simp [hle]; exact Nat.le_of_lt_succ (Nat.lt_succ_of_le hle)
-  · simp [hle]
-    have hk : (0 : Nat) < kTarget := by decide
-    set m := (n + kTarget - 1) / kTarget
-    have hm : m ≤ 2 ^ ceilLog2 m := ceilLog2_spec m
-    -- n ≤ kTarget * m by definition of ceiling division
-    have hcd : n ≤ kTarget * m := by
-      have : kTarget * ((n + kTarget - 1) / kTarget) ≥ n := by
-        have := Nat.div_mul_le_self (n + kTarget - 1) kTarget
-        -- n + kTarget - 1 ≥ kTarget * ((n + kTarget - 1) / kTarget)? no, opposite
-        -- Actually: (a / b) * b ≤ a, so we need a ≤ b * ceil(a/b).
-        -- n ≤ kTarget * ceil(n / kTarget) = kTarget * ((n + kTarget - 1) / kTarget).
-        have h1 : n + kTarget - 1 < kTarget * ((n + kTarget - 1) / kTarget) + kTarget := by
-          have := Nat.lt_div_add_one_mul_self (n + kTarget - 1) hk
-          linarith [Nat.mul_comm kTarget ((n + kTarget - 1) / kTarget)]
-        omega
+  · calc n ≤ kTarget := hle
+      _ = kTarget * 2 ^ 0 := by simp
+      _ = kTarget * 2 ^ bucketBitsFor n := by
+          congr 1; simp [bucketBitsFor, if_pos hle]
+  · have hk : (0 : Nat) < kTarget := by decide
+    have hcd : n ≤ kTarget * ((n + kTarget - 1) / kTarget) := by
+      have h1 := (Nat.div_add_mod (n + kTarget - 1) kTarget).symm
+      have h2 : (n + kTarget - 1) % kTarget < kTarget := Nat.mod_lt _ hk
       omega
-    calc n ≤ kTarget * m := hcd
-      _ ≤ kTarget * 2 ^ ceilLog2 m := Nat.mul_le_mul_left kTarget hm
+    have hm_le : (n + kTarget - 1) / kTarget ≤
+        2 ^ ceilLog2 ((n + kTarget - 1) / kTarget) := ceilLog2_spec _
+    have hfin : kTarget * ((n + kTarget - 1) / kTarget) ≤
+        kTarget * 2 ^ ceilLog2 ((n + kTarget - 1) / kTarget) :=
+      Nat.mul_le_mul_left kTarget hm_le
+    have heq : bucketBitsFor n = ceilLog2 ((n + kTarget - 1) / kTarget) :=
+      by simp [bucketBitsFor, if_neg hle]
+    rw [heq]
+    exact Nat.le_trans hcd hfin
 
-/-- `bucketDirSize` is a positive power-of-two times 2. -/
+/-- `bucketDirSize` is positive. -/
 theorem bucketDirSize_pos (n : Nat) : 0 < bucketDirSize n := by
   unfold bucketDirSize
-  exact Nat.mul_pos (by decide) (Nat.pos_pow_of_pos _ (by decide))
+  exact Nat.mul_pos (by decide) (Nat.two_pow_pos _)
 
 end BucketBound
 end PredictiveBVH
