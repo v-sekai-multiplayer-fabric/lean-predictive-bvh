@@ -19,7 +19,7 @@ import PredictiveBVH.Relativistic.NoGod
 -- With r128 fixed-point we can handle galaxy-scale coordinates, so zones
 -- partition the 30-bit Hilbert code space adaptively based on entity density.
 -- Codes are computed by hilbertOfBox (Skilling 2004); the span structure is
--- named MortonSpan for historical reasons but stores Hilbert code ranges.
+-- named HilbertSpan for historical reasons but stores Hilbert code ranges.
 --
 -- Entity-to-zone assignment: 30-bit Hilbert code prefix (O(1) per entity).
 --
@@ -68,50 +68,49 @@ def FabricLatency.toTicks : FabricLatency → Nat
   | .crossRegion => 4
   | .satellite   => 40
 
--- ── Hilbert span (struct named MortonSpan for historical reasons) ────────────
+-- ── Hilbert span ─────────────────────────────────────────────────────────────
 
 /-- A contiguous Hilbert-code interval [lo, hi] (inclusive) representing a zone's
     coverage of the 30-bit Hilbert space.  Zone i with prefixDepth d owns exactly
     the codes whose top-d bits equal i, i.e. [i·2^(30-d), (i+1)·2^(30-d) − 1].
     Codes are computed by hilbertOfBox (Skilling 2004).
     Spans are disjoint across zones and together tile all 2^30 codes. -/
-structure MortonSpan where
+structure HilbertSpan where
   lo : Nat   -- inclusive lower bound
   hi : Nat   -- inclusive upper bound
   deriving Inhabited, Repr
 
 /-- Number of distinct Hilbert codes in one zone given prefixDepth prefix bits.
     = 2^(30 − prefixDepth).  For 112 zones (prefixDepth = 7): width = 2^23 ≈ 8M codes. -/
-def mortonSpanWidth (prefixDepth : Nat) : Nat :=
+def hilbertSpanWidth (prefixDepth : Nat) : Nat :=
   1 <<< (30 - min prefixDepth 30)
 
 /-- Hilbert code span for zone index `zoneIdx` given `prefixDepth` prefix bits. -/
-def zoneMortonSpan (zoneIdx prefixDepth : Nat) : MortonSpan :=
-  let w := mortonSpanWidth prefixDepth
+def zoneHilbertSpan (zoneIdx prefixDepth : Nat) : HilbertSpan :=
+  let w := hilbertSpanWidth prefixDepth
   { lo := zoneIdx * w
     hi := zoneIdx * w + w - 1 }
 
 /-- Hilbert code span for zone `i` derived from the zones array size.
     Use this to log or inspect which Hilbert codes zone i owns. -/
-def zoneSpan (zones : Array ZoneState) (i : Nat) : MortonSpan :=
-  zoneMortonSpan i (zonePrefixDepth zones.size)
+def zoneSpan (zones : Array ZoneState) (i : Nat) : HilbertSpan :=
+  zoneHilbertSpan i (zonePrefixDepth zones.size)
 
 /-- True when Hilbert code `c` falls inside span `s`. -/
-def MortonSpan.contains (s : MortonSpan) (c : Nat) : Bool :=
+def HilbertSpan.contains (s : HilbertSpan) (c : Nat) : Bool :=
   s.lo ≤ c && c ≤ s.hi
 
 /-- True when two spans share at least one Hilbert code. -/
-def MortonSpan.overlaps (a b : MortonSpan) : Bool :=
+def HilbertSpan.overlaps (a b : HilbertSpan) : Bool :=
   a.lo ≤ b.hi && b.lo ≤ a.hi
 
--- ── Morton span invariants (general, any prefix depth ≤ 30) ──────────────────
+-- ── Hilbert span invariants (general, any prefix depth ≤ 30) ────────────────
 
-/-- A Morton code `c` lies in zone `i`'s span iff its top `prefixDepth` bits equal `i`.
-    This is the operational form used by `formGroups` in MortonBroadphase.lean. -/
+/-- A Hilbert code `c` lies in zone `i`'s span iff its top `prefixDepth` bits equal `i`. -/
 theorem span_contains_iff_prefix (c i prefixDepth : Nat) (hd : prefixDepth ≤ 30) :
-    (zoneMortonSpan i prefixDepth).contains c = true ↔
+    (zoneHilbertSpan i prefixDepth).contains c = true ↔
       c >>> (30 - prefixDepth) = i := by
-  simp only [MortonSpan.contains, zoneMortonSpan, mortonSpanWidth,
+  simp only [HilbertSpan.contains, zoneHilbertSpan, hilbertSpanWidth,
              Nat.min_eq_left hd, Bool.and_eq_true, decide_eq_true_eq,
              Nat.shiftRight_eq_div_pow, Nat.shiftLeft_eq, Nat.one_mul]
   generalize hw_eq : (2 : Nat) ^ (30 - prefixDepth) = w
@@ -129,10 +128,10 @@ theorem span_contains_iff_prefix (c i prefixDepth : Nat) (hd : prefixDepth ≤ 3
       rw [hdiv, Nat.mul_add, Nat.mul_one, Nat.mul_comm] at h1
       omega
 
-/-- Distinct zones have disjoint Morton spans, regardless of prefix depth. -/
+/-- Distinct zones have disjoint Hilbert spans, regardless of prefix depth. -/
 theorem zoneSpans_disjoint (i j prefixDepth : Nat) (h : i ≠ j) :
-    (zoneMortonSpan i prefixDepth).overlaps (zoneMortonSpan j prefixDepth) = false := by
-  simp only [MortonSpan.overlaps, zoneMortonSpan, mortonSpanWidth,
+    (zoneHilbertSpan i prefixDepth).overlaps (zoneHilbertSpan j prefixDepth) = false := by
+  simp only [HilbertSpan.overlaps, zoneHilbertSpan, hilbertSpanWidth,
              Bool.and_eq_false_iff, decide_eq_false_iff_not, Nat.not_le,
              Nat.shiftLeft_eq, Nat.one_mul]
   generalize hw_eq : (2 : Nat) ^ (30 - min prefixDepth 30) = w
@@ -289,7 +288,7 @@ def countInFlight (migInfo : Array EntityMigInfo) : Nat :=
 -- The C++ FabricZone cross-zone relay forwards a neighbor's CH_INTEREST row to
 -- local clients iff the entity's 30-bit Morton code is inside a padded band
 -- around this zone's own Morton span. The band width is a compile-time knob
--- (AOI_CELLS in C++), expressed in units of `mortonSpanWidth prefixDepth`.
+-- (AOI_CELLS in C++), expressed in units of `hilbertSpanWidth prefixDepth`.
 --
 -- Two properties matter:
 --   1. Coverage: the band always includes this zone's own span, so the relay
@@ -307,8 +306,8 @@ def countInFlight (migInfo : Array EntityMigInfo) : Nat :=
     algebraic band so the coverage and width theorems stay clean. The clamp
     is only reachable at the last zone (`zoneIdx = 2^prefixDepth - 1`), where
     the band already covers the top of Morton space. -/
-def aoiBand (zoneIdx prefixDepth aoiCells : Nat) : MortonSpan :=
-  let w := mortonSpanWidth prefixDepth
+def aoiBand (zoneIdx prefixDepth aoiCells : Nat) : HilbertSpan :=
+  let w := hilbertSpanWidth prefixDepth
   let zoneLo := zoneIdx * w
   let zoneHi := zoneIdx * w + w - 1
   let pad := aoiCells * w
@@ -319,10 +318,10 @@ def aoiBand (zoneIdx prefixDepth aoiCells : Nat) : MortonSpan :=
     zone's own span. The C++ relay therefore can never drop a locally-
     produced entity regardless of `aoiCells`. -/
 theorem aoiBand_covers_self (zoneIdx prefixDepth aoiCells : Nat) :
-    let span := zoneMortonSpan zoneIdx prefixDepth
+    let span := zoneHilbertSpan zoneIdx prefixDepth
     let band := aoiBand zoneIdx prefixDepth aoiCells
     band.lo ≤ span.lo ∧ span.hi ≤ band.hi := by
-  simp only [aoiBand, zoneMortonSpan]
+  simp only [aoiBand, zoneHilbertSpan]
   refine ⟨?_, ?_⟩
   · exact Nat.sub_le _ _
   · omega
@@ -332,19 +331,19 @@ theorem aoiBand_covers_self (zoneIdx prefixDepth aoiCells : Nat) :
     form of the superlinear-scaling invariant: adding zones shrinks cellWidth
     (the zone-count divisor), so per-client relay bandwidth stays bounded. -/
 theorem aoiBand_width_bound (zoneIdx prefixDepth aoiCells : Nat)
-    (hw : 0 < mortonSpanWidth prefixDepth) :
-    let w := mortonSpanWidth prefixDepth
+    (hw : 0 < hilbertSpanWidth prefixDepth) :
+    let w := hilbertSpanWidth prefixDepth
     let band := aoiBand zoneIdx prefixDepth aoiCells
     band.hi + 1 - band.lo ≤ (1 + 2 * aoiCells) * w := by
   simp only [aoiBand]
-  have h1 : (1 + 2 * aoiCells) * mortonSpanWidth prefixDepth =
-      mortonSpanWidth prefixDepth + 2 * aoiCells * mortonSpanWidth prefixDepth := by
+  have h1 : (1 + 2 * aoiCells) * hilbertSpanWidth prefixDepth =
+      hilbertSpanWidth prefixDepth + 2 * aoiCells * hilbertSpanWidth prefixDepth := by
     rw [Nat.add_mul, Nat.one_mul]
-  have h2 : 2 * aoiCells * mortonSpanWidth prefixDepth =
-      2 * (aoiCells * mortonSpanWidth prefixDepth) :=
-    Nat.mul_assoc 2 aoiCells (mortonSpanWidth prefixDepth)
-  rcases Nat.le_total (zoneIdx * mortonSpanWidth prefixDepth)
-      (aoiCells * mortonSpanWidth prefixDepth) with hab | hab
+  have h2 : 2 * aoiCells * hilbertSpanWidth prefixDepth =
+      2 * (aoiCells * hilbertSpanWidth prefixDepth) :=
+    Nat.mul_assoc 2 aoiCells (hilbertSpanWidth prefixDepth)
+  rcases Nat.le_total (zoneIdx * hilbertSpanWidth prefixDepth)
+      (aoiCells * hilbertSpanWidth prefixDepth) with hab | hab
   · rw [Nat.min_eq_left hab]
     omega
   · rw [Nat.min_eq_right hab]
