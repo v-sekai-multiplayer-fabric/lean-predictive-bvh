@@ -10,12 +10,12 @@ A **Bounding Volume Hierarchy (BVH)** reduces this to roughly O(N log N). But a 
 
 The **Predictive BVH** solves this by inflating each entity's bounding box forward in time by `v·δ + ½·a·δ²` (ghost expansion). The box is guaranteed to contain all positions the entity could reach over the next δ seconds. This means the BVH can be rebuilt less often (every δ seconds instead of every step) without losing correctness.
 
-**The guarantee is not just an engineering choice — it is a Lean theorem.** The code that computes ghost bounds is generated directly from the proof.
+The C that computes ghost bounds is generated directly from a Lean proof. The guarantee is the proof.
 
 ## What "formally verified" means here
 
-Normal code: you write it, you test it, you hope.
-Lean code: you write a mathematical proof that the code is correct. If the proof compiles, the guarantee is absolute — no edge case can slip through.
+Normal code: you write it and rely on tests to catch bugs.
+Lean code: you write a mathematical proof that the code is correct. If the proof compiles, no edge case can slip through.
 
 This project uses Lean 4 to prove properties like:
 - "The ghost AABB always contains the entity's real position for the next δ seconds" (`expansion_covers_k_ticks`)
@@ -93,7 +93,7 @@ The public physical units for this system are **Hz, seconds, and metres**. Inter
 
 The Lean library is the source of truth; `Codegen/CodeGen.lean` emits inline `pbvh_*(hz)` helper functions and `PBVH_*_DEFAULT` convenience values into `predictive_bvh.h`. At runtime the C++ engine reads the live simulation rate from `Engine::get_physics_ticks_per_second()` and recomputes every derived quantity through the helpers. The `_DEFAULT` values are compile-time constants that wire-encoding scales use so every peer agrees on a single formula regardless of the live rate.
 
-**Helpers** (shown in physical units):
+#### Helpers (shown in physical units)
 
 | Helper | Physical meaning |
 |---|---|
@@ -102,16 +102,18 @@ The Lean library is the source of truth; `Codegen/CodeGen.lean` emits inline `pb
 | `pbvh_v_max_physical_um_per_tick(hz)` | **10 m/s** normal velocity cap |
 | `pbvh_accel_floor_um_per_tick2(hz)`   | **≈ 0.7 m/s²** minimum resolvable acceleration |
 
-**Physical invariants** (rate-independent):
+#### Physical invariants (rate-independent)
 
 | Symbol | Physical value |
 |---|---|
 | `PBVH_INTEREST_RADIUS_UM` | **5 m** interest query radius |
 | `PBVH_CURRENT_FUNNEL_PEAK_V_M_PER_S` | **60 m/s** C7 rip-current spike cap |
 
-**Simulation rate floor.** The minimum supported rate is **10 Hz** — the social VR IK sync floor, which is also the ≤100 ms Long-Latency-Reflex (LLR) bound proved in `Scale/ScaleHypotheses.lean`. Below 10 Hz, one simulation step exceeds 100 ms and the mocap-freshness guarantee breaks. The configured default in `Core/Types.lean` is **20 Hz**.
+#### Simulation rate floor
 
-**Default-rate convenience constants** (evaluated at `PBVH_SIM_TICK_HZ = 20 Hz`):
+The minimum supported rate is **10 Hz** — the social VR IK sync floor, which is also the ≤100 ms Long-Latency-Reflex (LLR) bound proved in `Scale/ScaleHypotheses.lean`. Below 10 Hz, one simulation step exceeds 100 ms and the mocap-freshness guarantee breaks. The configured default in `Core/Types.lean` is **20 Hz**.
+
+#### Default-rate convenience constants (evaluated at `PBVH_SIM_TICK_HZ = 20 Hz`)
 
 | Physical meaning | C symbol |
 |---|---|

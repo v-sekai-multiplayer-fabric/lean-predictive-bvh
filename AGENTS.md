@@ -4,13 +4,13 @@ Guidance for AI coding agents working in this submodule.
 
 ## What this is
 
-Canonical mathematical authority for all physics, geometry, and algorithmic
-proofs across the multiplayer-fabric stack. Contains formal Lean 4 proofs
-and a code-generation pipeline that writes `predictive_bvh.h` (C header
-consumed by the mmog module).
+Holds the Lean proofs that physics, geometry, and algorithm code in the
+rest of the multiplayer-fabric stack must agree with. Contains formal
+Lean 4 proofs and a code-generation pipeline that writes
+`predictive_bvh.h` (C header consumed by the mmog module).
 
-**Do not implement algorithms elsewhere that contradict a proof here.
-If an implementation differs from the Lean proof, trust the proof.**
+Do not implement algorithms elsewhere that contradict a proof here. If
+an implementation differs from the Lean proof, trust the proof.
 
 ## Build
 

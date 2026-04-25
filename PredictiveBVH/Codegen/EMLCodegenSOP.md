@@ -60,4 +60,4 @@ if (r128_le(c4_bound_um, r128_from_int(latency_distance_um)) == 0) {
 For the remaining scenarios, consume C1/C5/C7 at authority/interest boundaries (pass v_max via `pbvh_v_max_physical_um_per_tick(hz)`), C3 at portal traversal, C6 at zone-handoff coordinate reframing (pass the configured chunk offset), and C2 in acceleration-integrity checks (pass `pbvh_accel_floor_um_per_tick2(hz)`). All helpers return R128 μm.
 
 ## Maintenance & Updates
-If new physics systems are added to the engine (e.g., higher rip-current peak velocities for C7), simply bump the constants in `PredictiveBVH/Primitives/Types.lean` and rerun `lake exe bvh-codegen`. The Lean prover will re-verify the E-graph equivalencies and overwrite `predictive_bvh.h` with zero structural overhead.
+If new physics systems are added to the engine (e.g., higher rip-current peak velocities for C7), bump the constants in `PredictiveBVH/Primitives/Types.lean` and rerun `lake exe bvh-codegen`. The Lean prover re-verifies the E-graph equivalencies and overwrites `predictive_bvh.h`.
