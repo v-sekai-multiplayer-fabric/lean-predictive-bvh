@@ -111,7 +111,7 @@ The Lean library is the source of truth; `Codegen/CodeGen.lean` emits inline `pb
 | `PBVH_INTEREST_RADIUS_UM` | **5 m** interest query radius |
 | `PBVH_CURRENT_FUNNEL_PEAK_V_M_PER_S` | **60 m/s** C7 rip-current spike cap |
 
-**Simulation rate floor.** The minimum supported rate is **10 Hz** — VRChat's IK sync rate, which is also the ≤100 ms Long-Latency-Reflex (LLR) bound proved in `Scale/ScaleHypotheses.lean`. Below 10 Hz, one simulation step exceeds 100 ms and the mocap-freshness guarantee breaks. The configured default in `Core/Types.lean` is **20 Hz**.
+**Simulation rate floor.** The minimum supported rate is **10 Hz** — the social VR IK sync floor, which is also the ≤100 ms Long-Latency-Reflex (LLR) bound proved in `Scale/ScaleHypotheses.lean`. Below 10 Hz, one simulation step exceeds 100 ms and the mocap-freshness guarantee breaks. The configured default in `Core/Types.lean` is **20 Hz**.
 
 **Default-rate convenience constants** (evaluated at `PBVH_SIM_TICK_HZ = 20 Hz`):
 
@@ -123,17 +123,3 @@ The Lean library is the source of truth; `Codegen/CodeGen.lean` emits inline `pb
 | 10 m/s velocity cap | `PBVH_V_MAX_PHYSICAL_DEFAULT` |
 | ≈ 0.7 m/s² acceleration floor | `PBVH_ACCEL_FLOOR_DEFAULT` |
 | 60 m/s C7 funnel cap | `PBVH_CURRENT_FUNNEL_PEAK_V_UM_TICK_DEFAULT` |
-
-## p50 SLA (proved in AbyssalSLA.lean)
-
-For 1,000 players at 50% zone capacity:
-
-| Value | Number |
-|-------|--------|
-| Entities per zone | 1,800 |
-| Players per zone | 16 |
-| Player entity budget | 896 (49.7%) |
-| Sealife entity budget | 904 |
-| Zones needed | 63 |
-| Zones per server (8-core, 1 OS core) | 7 |
-| **Servers needed** | **9** |

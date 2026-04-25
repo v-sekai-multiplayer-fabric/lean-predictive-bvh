@@ -7,7 +7,7 @@ Guidance for AI coding agents working in this submodule.
 Canonical mathematical authority for all physics, geometry, and algorithmic
 proofs across the multiplayer-fabric stack. Contains formal Lean 4 proofs
 and a code-generation pipeline that writes `predictive_bvh.h` (C header
-consumed by the Godot mmog module).
+consumed by the mmog module).
 
 **Do not implement algorithms elsewhere that contradict a proof here.
 If an implementation differs from the Lean proof, trust the proof.**
