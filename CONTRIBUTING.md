@@ -124,9 +124,12 @@ bin/godot.macos.editor.dev.arm64 --headless --test \
 
 ## Deferred items
 
-Tracked in [todo.md](todo.md) and the root plan. Safe to defer because
-production consumers re-test results via callback predicates, so
-over-emission inside a proof gap is tolerated.
+The following research-tier proofs live in
+[multiplayer-fabric-predictive-bvh-research](https://github.com/V-Sekai-fire/multiplayer-fabric-predictive-bvh-research)
+because they are not in the codegen import closure (so they don't gate
+`predictive_bvh.h`) and are currently broken under Lean 4.26. Safe to
+defer because production consumers re-test results via callback
+predicates, so over-emission inside a proof gap is tolerated.
 
 - Phase 1c — functionalise `insertionSortByHilbert` off `Id.run do`,
   then prove `sorted_is_ascending_after_build` and
@@ -139,29 +142,37 @@ over-emission inside a proof gap is tolerated.
 
 ## Where invariants are proved — one-line index
 
+Production-tier (this repo, in the `lake build` gate):
+
 | File | Invariant |
 |---|---|
 | [Primitives/Types.lean](PredictiveBVH/Primitives/Types.lean) | `PbvhLeaf` / `PbvhInternal` / `BoundingBox` + basic ops |
-| [Spatial/Tree.lean](PredictiveBVH/Spatial/Tree.lean) | `build` / `aabbQueryN` soundness + completeness |
-| [Spatial/RefitIncremental.lean](PredictiveBVH/Spatial/RefitIncremental.lean) | Incremental refit soundness (`refitFull_preserves_size`, `refitIncrementalSpec_allMarked_eq_refitFull`, `refitIncrementalSpec_establishes_cover`) |
 | [Spatial/BucketBound.lean](PredictiveBVH/Spatial/BucketBound.lean) | `N ≤ K_target · 2^(bucketBitsFor N)` (average bucket bound) |
 | [Spatial/HilbertBroadphase.lean](PredictiveBVH/Spatial/HilbertBroadphase.lean) | Hilbert-prefix broadphase correctness |
 | [Spatial/HilbertRoundtrip.lean](PredictiveBVH/Spatial/HilbertRoundtrip.lean) | Forward / inverse Hilbert bijection |
-| [Spatial/Partition.lean](PredictiveBVH/Spatial/Partition.lean) | AABB partition / union / containment |
 | [Spatial/ScaleContradictions.lean](PredictiveBVH/Spatial/ScaleContradictions.lean) | Scale-proof contradictions |
 | [Spatial/EMLAdversarialHeuristic.lean](PredictiveBVH/Spatial/EMLAdversarialHeuristic.lean) | EML adversarial gap bounds |
 | [Formulas/Formula.lean](PredictiveBVH/Formulas/Formula.lean) | `ghostBoundExpr`, `surfaceAreaExpr`, `predictiveCostFormula` |
 | [Formulas/LowerBound.lean](PredictiveBVH/Formulas/LowerBound.lean) | SAH lower bound |
 | [Formulas/ScaleProofs.lean](PredictiveBVH/Formulas/ScaleProofs.lean) | Scale-proof capacity bounds |
-| [Protocol/Build.lean](PredictiveBVH/Protocol/Build.lean) | Tree build protocol + Hilbert sort |
-| [Protocol/Saturate.lean](PredictiveBVH/Protocol/Saturate.lean) | EGraph saturation on BVH formulas |
-| [Protocol/Fabric.lean](PredictiveBVH/Protocol/Fabric.lean) | Multi-zone migration state |
 | [Protocol/WaypointBound.lean](PredictiveBVH/Protocol/WaypointBound.lean) | Waypoint distance bound |
 | [Protocol/AbyssalSLA.lean](PredictiveBVH/Protocol/AbyssalSLA.lean) | Abyssal-tier SLA bounds |
-| [Interest/AuthorityInterest.lean](PredictiveBVH/Interest/AuthorityInterest.lean) | `InterestReplica`, authority zone |
 | [Codegen/CodeGen.lean](PredictiveBVH/Codegen/CodeGen.lean) | `genC` pipeline + header assembly |
 | [Codegen/TreeC.lean](PredictiveBVH/Codegen/TreeC.lean) | Tree-op C (control-flow only) |
 | [Codegen/QuinticHermite.lean](PredictiveBVH/Codegen/QuinticHermite.lean) | C³ quintic Hermite basis |
+
+Research-tier ([multiplayer-fabric-predictive-bvh-research](https://github.com/V-Sekai-fire/multiplayer-fabric-predictive-bvh-research), currently broken under Lean 4.26):
+
+| File | Invariant |
+|---|---|
+| `PredictiveBVHResearch/Spatial/Tree.lean` | `build` / `aabbQueryN` soundness + completeness |
+| `PredictiveBVHResearch/Spatial/RefitIncremental.lean` | Incremental refit soundness |
+| `PredictiveBVHResearch/Spatial/Partition.lean` | AABB partition / union / containment |
+| `PredictiveBVHResearch/Protocol/Build.lean` | Tree build protocol + Hilbert sort |
+| `PredictiveBVHResearch/Protocol/Saturate.lean` | EGraph saturation on BVH formulas |
+| `PredictiveBVHResearch/Protocol/Fabric.lean` | Multi-zone migration state |
+| `PredictiveBVHResearch/Interest/AuthorityInterest.lean` | `InterestReplica`, authority zone |
+| `PredictiveBVHResearch/Relativistic/ReBAC.lean` | ReBAC authorisation bounds |
 
 ## How to add a new formula
 
@@ -176,7 +187,9 @@ over-emission inside a proof gap is tolerated.
 
 ## How to add a new tree op
 
-1. State it in `Spatial/Tree.lean` as a pure function on `PbvhTree`.
+1. State it in
+   [`PredictiveBVHResearch/Spatial/Tree.lean`](https://github.com/V-Sekai-fire/multiplayer-fabric-predictive-bvh-research/blob/main/PredictiveBVHResearch/Spatial/Tree.lean)
+   as a pure function on `PbvhTree`.
 2. Prove the invariants it preserves (structural, cover, skip-pointer,
    etc.) — reuse lemmas from the index above.
 3. Emit the C body as a string in `Codegen/TreeC.lean`, calling existing
