@@ -2,8 +2,6 @@
 
 Lean 4 formal verification and code generation for the spatial oracle used by `multiplayer_fabric`. The output is a single C header (`predictive_bvh.h`) that the production module includes.
 
-See [CONCEPT.md](CONCEPT.md) for the physics and demo story.
-
 ## The problem this solves
 
 In a multiplayer game, every simulation step you need to answer: "which entities can see (or affect) which other entities?" The naive answer — check every pair — is O(N²) and falls apart above ~100 entities per server.
