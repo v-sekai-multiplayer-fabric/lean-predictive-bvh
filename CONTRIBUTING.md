@@ -8,18 +8,29 @@ except through the paths documented below.
 
 ## Mental model
 
-- **Lean 4 + Batteries, no Mathlib.** Tool choice is locked. Proofs use
-  `omega`, `grind`, `decide`, and hand induction.
-- **AmoLean EGraph** ([../AmoLean/](../AmoLean/)) is the arithmetic
-  optimiser. It operates on `Expr Int` — integer-like ring polynomials
-  only. Comparisons, ternaries, and booleans are not ring ops.
-- **`bvh-codegen`** is the IO entry. `lake exe bvh-codegen` writes
-  `predictive_bvh.h` (consumed by
-  [`core/math/predictive_bvh_adapter.h`](../../core/math/predictive_bvh_adapter.h)).
-- **Proof layout.** `PredictiveBVH/Spatial/` — tree ops + query proofs.
-  `PredictiveBVH/Formulas/` — algebraic formulas (ghost bound, surface
-  area, EML gaps). `PredictiveBVH/Protocol/` — fabric, interest,
-  capacity. `PredictiveBVH/Codegen/` — C emission.
+### Lean 4 + Batteries, no Mathlib
+
+Tool choice is locked. Proofs use `omega`, `grind`, `decide`, and hand
+induction.
+
+### AmoLean EGraph
+
+[../AmoLean/](../AmoLean/) is the arithmetic optimiser. It operates on
+`Expr Int` — integer-like ring polynomials only. Comparisons, ternaries,
+and booleans are not ring ops.
+
+### `bvh-codegen`
+
+The IO entry. `lake exe bvh-codegen` writes `predictive_bvh.h` (consumed
+by [`core/math/predictive_bvh_adapter.h`](../../core/math/predictive_bvh_adapter.h)).
+
+### Proof layout
+
+- `PredictiveBVH/Spatial/` — tree ops + query proofs.
+- `PredictiveBVH/Formulas/` — algebraic formulas (ghost bound, surface
+  area, EML gaps).
+- `PredictiveBVH/Protocol/` — fabric, interest, capacity.
+- `PredictiveBVH/Codegen/` — C emission.
 
 ## The codegen pipeline
 
@@ -43,29 +54,36 @@ as raw string literals. That's where hand-written C is permitted — but
 
 ### Codegen discipline
 
-- **Ring arithmetic in TreeC.lean ⇒ bug.** If you find yourself writing
-  `r128_add` / `r128_mul` / `r128_sub` inline in a string literal, stop:
-  extract the polynomial as an `Expr Int`, emit via `genC`, and call
-  the helper.
-- **Comparisons and branches — ring-lift paths, current state.**
-  `r128_le`, ternaries, and `if` branches are not ring ops over plain
-  `Expr Int`, but AmoLean provides the machinery to ring-lift them:
-  - **Z ↔ GF(2) bridge** (shipped). Sign-bit extraction turns a
-    comparison into a ring operation over GF(2)ⁿ; min / max / contains /
-    overlap all become branchless ring polynomials with a witness
-    sign bit. `aabb_overlaps_ring` is emitted via `genC` in
-    [`aabbC`](PredictiveBVH/Codegen/CodeGen.lean). The C-side
-    `aabb_union` / `aabb_contains` / `aabb_overlaps` in the adapter
-    still use the hand-written `r128_le ? a : b` ternary form;
-    migrating them to the bridge is on the roadmap.
-  - **Blend pattern** (available). `cond ? new : old = old + flag * (new - old)`
-    once `flag ∈ {0, 1}`. The expression is proved in Lean and evaluable
-    via `evalExpr`; wire it into `genC` if a blend is needed in C emission.
-    Composes cleanly with the bridge's sign-bit flag.
-- **Boilerplate C functions** that aren't templated (one-off glue,
-  struct constructors, etc.) go in
-  [`core/math/predictive_bvh_adapter.h`](../../core/math/predictive_bvh_adapter.h),
-  not in the emitted header.
+#### Ring arithmetic in TreeC.lean is a bug
+
+If you find yourself writing `r128_add` / `r128_mul` / `r128_sub` inline
+in a string literal, stop: extract the polynomial as an `Expr Int`, emit
+via `genC`, and call the helper.
+
+#### Comparisons and branches — ring-lift paths
+
+`r128_le`, ternaries, and `if` branches are not ring ops over plain
+`Expr Int`, but AmoLean provides the machinery to ring-lift them.
+
+The Z ↔ GF(2) bridge (shipped) extracts a sign bit so a comparison
+becomes a ring operation over GF(2)ⁿ; min / max / contains / overlap all
+become branchless ring polynomials with a witness sign bit.
+`aabb_overlaps_ring` is emitted via `genC` in
+[`aabbC`](PredictiveBVH/Codegen/CodeGen.lean). The C-side `aabb_union` /
+`aabb_contains` / `aabb_overlaps` in the adapter still use the
+hand-written `r128_le ? a : b` ternary form; migrating them to the
+bridge is on the roadmap.
+
+The blend pattern (available) gives `cond ? new : old = old + flag * (new - old)`
+once `flag ∈ {0, 1}`. The expression is proved in Lean and evaluable via
+`evalExpr`; wire it into `genC` if a blend is needed in C emission.
+Composes cleanly with the bridge's sign-bit flag.
+
+#### Boilerplate C functions
+
+One-off glue, struct constructors, and other untemplated C goes in
+[`core/math/predictive_bvh_adapter.h`](../../core/math/predictive_bvh_adapter.h),
+not in the emitted header.
 
 ## Build + verification
 
@@ -95,11 +113,11 @@ bin/godot.macos.editor.dev.arm64 --headless --test \
 
 ## Current invariants
 
-- **Zero `sorry`** under `PredictiveBVH/`.
-- **Zero `axiom`** under `PredictiveBVH/`.
-- **313 Lean jobs green** from `lake build`.
-- **Regression gate** — 32 cases / 4347+ assertions green.
-- **Bucket bound** — `bmax ≤ 2 · PBVH_BUCKET_K_TARGET` at every built N,
+- Zero `sorry` under `PredictiveBVH/`.
+- Zero `axiom` under `PredictiveBVH/`.
+- 313 Lean jobs green from `lake build`.
+- Regression gate: 32 cases, 4347+ assertions green.
+- Bucket bound: `bmax ≤ 2 · PBVH_BUCKET_K_TARGET` at every built N,
   enforced by the bench via `CHECK_MESSAGE`. The average case is proved
   in [Spatial/BucketBound.lean](PredictiveBVH/Spatial/BucketBound.lean):
   `N ≤ K_target · 2^(bucketBitsFor N)`.
@@ -110,14 +128,13 @@ Tracked in [todo.md](todo.md) and the root plan. Safe to defer because
 production consumers re-test results via callback predicates, so
 over-emission inside a proof gap is tolerated.
 
-- **Phase 1c** — functionalise `insertionSortByHilbert` off `Id.run do`,
+- Phase 1c — functionalise `insertionSortByHilbert` off `Id.run do`,
   then prove `sorted_is_ascending_after_build` and
   `aabbQueryB_agrees_with_aabbQueryN`.
-- **Phase 2b'** — soundness / completeness for `rayQueryN` /
-  `convexQueryN`.
-- **Incremental-branch `tick_agrees_with_build`** — currently proved
-  only for the `bucketBits = 0` fallback path. Mechanising the
-  incremental branch needs a window-preservation companion to
+- Phase 2b' — soundness / completeness for `rayQueryN` / `convexQueryN`.
+- Incremental-branch `tick_agrees_with_build` — currently proved only
+  for the `bucketBits = 0` fallback path. Mechanising the incremental
+  branch needs a window-preservation companion to
   `resortBucket_preserves_structural`.
 
 ## Where invariants are proved — one-line index
