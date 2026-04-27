@@ -13,6 +13,9 @@ require «truth_research_zk» from git
 lean_lib «PredictiveBVH» where
   roots := #[`PredictiveBVH]
 
+lean_lib LassoMapping where
+  roots := #[`LassoMapping]
+
 -- AmoLean C code generator: writes thirdparty/predictive_bvh/predictive_bvh.h
 @[default_target]
 lean_exe «bvh-codegen» where
