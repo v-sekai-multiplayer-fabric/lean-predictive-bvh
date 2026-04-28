@@ -16,6 +16,12 @@ lean_lib «PredictiveBVH» where
 lean_lib LassoMapping where
   roots := #[`LassoMapping]
 
+lean_lib WorkQueue where
+  roots := #[`WorkQueue]
+
+lean_lib GEPA where
+  roots := #[`GEPA]
+
 -- AmoLean C code generator: writes thirdparty/predictive_bvh/predictive_bvh.h
 @[default_target]
 lean_exe «bvh-codegen» where
