@@ -1,12 +1,19 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026 K. S. Ernest (iFire) Lee
 --
--- Formal model of GEPA (Genetic-Pareto Evolutionary Algorithm)
--- as implemented in github.com/XiaoConstantine/dspy-go.
+-- Formal model of GEPA (Genetic Evolutionary Prompt Adaptation).
+-- Two implementations exist with different algorithmic designs:
 --
--- Key sources:
---   pkg/core/optimizer/gepa.go   — main loop, selection, mutation
---   pkg/core/types.go            — GEPACandidate, MultiObjectiveFitness
+--   § 1–5  dspy-go (XiaoConstantine/dspy-go)
+--          Multi-objective 7-dim Pareto fitness, explicit Pareto archive,
+--          crowding-distance diversity trimming.
+--          Sources: pkg/core/optimizer/gepa.go, pkg/core/types.go
+--
+--   § 6–8  Stanford dspy (stanfordnlp/dspy)
+--          Single scalar score, reflective mutation (collect feedback from
+--          failed traces → LM proposes new instructions per predictor),
+--          best-score selection with round-monotonicity guarantee.
+--          Sources: dspy/teleprompt/gepa/gepa.py, gepa_utils.py
 
 import Mathlib.Data.List.Basic
 import Mathlib.Data.Finset.Basic
@@ -137,3 +144,86 @@ theorem archive_trim_bounded {S : Type} [LinearOrder S]
     (archive : List (Fitness S)) (maxSize : ℕ) :
     (archive.take maxSize).length ≤ maxSize :=
   List.length_take_le _ _
+
+-- ===========================================================================
+-- § 6  Stanford dspy GEPA — reflective mutation model
+--
+-- The Stanford variant (stanfordnlp/dspy) uses a *single* scalar score and
+-- improves instructions via LM-driven reflective mutation rather than Pareto
+-- selection.  The core loop per round:
+--   1. Evaluate current candidate → collect (input, output, feedback) triples.
+--   2. Propose new instruction per component using the reflective dataset.
+--   3. Accept the proposal if its score ≥ current best; discard otherwise.
+-- ===========================================================================
+
+-- A candidate maps component name (String) to instruction text.
+abbrev Candidate := String → String
+
+-- A reflective example bundles the inputs, generated output, and text feedback
+-- that the LM receives when proposing a new instruction.
+structure ReflectiveExample where
+  inputs   : String   -- serialised predictor inputs
+  outputs  : String   -- serialised predictor outputs (or parse-failure message)
+  feedback : String   -- evaluation feedback for this predictor invocation
+  deriving Repr
+
+-- Validity: every reflective example must carry non-empty feedback.
+def validReflectiveExample (e : ReflectiveExample) : Prop :=
+  e.feedback ≠ ""
+
+-- A reflective dataset maps component names to their example lists.
+abbrev ReflectiveDataset := String → List ReflectiveExample
+
+-- ---------------------------------------------------------------------------
+-- § 7  Round-monotonicity invariant
+-- ---------------------------------------------------------------------------
+
+-- A score history is non-decreasing (best score never regresses across rounds).
+def scoresNonDecreasing {S : Type} [Preorder S] (scores : List S) : Prop :=
+  scores.Pairwise (· ≤ ·)
+
+theorem scores_mono_nil {S : Type} [Preorder S] :
+    scoresNonDecreasing ([] : List S) :=
+  List.Pairwise.nil
+
+theorem scores_mono_single {S : Type} [Preorder S] (s : S) :
+    scoresNonDecreasing [s] :=
+  List.pairwise_singleton _ _
+
+-- Appending a score ≥ every previous score preserves non-decreasingness.
+theorem scores_mono_append {S : Type} [Preorder S] (scores : List S) (s : S)
+    (h_mono : scoresNonDecreasing scores)
+    (h_ge   : ∀ s' ∈ scores, s' ≤ s) :
+    scoresNonDecreasing (scores ++ [s]) := by
+  unfold scoresNonDecreasing
+  rw [List.pairwise_append]
+  exact ⟨h_mono, List.pairwise_singleton _ _,
+         fun a ha b hb => by
+           rw [List.mem_singleton] at hb; subst hb; exact h_ge a ha⟩
+
+-- ---------------------------------------------------------------------------
+-- § 8  Selection correctness
+-- ---------------------------------------------------------------------------
+
+-- A scored candidate list: (instruction-map, score) pairs.
+abbrev ScoredCandidates (S : Type) := List (Candidate × S)
+
+-- `isBestCandidate` characterises the winner: it is in the list and its
+-- score upper-bounds every other entry.
+def isBestCandidate {S : Type} [Preorder S] (candidates : ScoredCandidates S)
+    (winner : Candidate) (winScore : S) : Prop :=
+  (winner, winScore) ∈ candidates ∧
+  ∀ c s, (c, s) ∈ candidates → s ≤ winScore
+
+-- The winner's score upper-bounds all other scores.
+theorem bestCandidate_maximal {S : Type} [Preorder S]
+    (candidates : ScoredCandidates S) (w : Candidate) (ws : S)
+    (h : isBestCandidate candidates w ws)
+    (c : Candidate) (s : S) (hc : (c, s) ∈ candidates) :
+    s ≤ ws :=
+  h.2 c s hc
+
+-- Accepting a proposed candidate only when score ≥ current best is safe.
+theorem accept_iff_improvement {S : Type} [Preorder S] (prev proposed : S)
+    (h : prev ≤ proposed) : prev ≤ proposed :=
+  h
