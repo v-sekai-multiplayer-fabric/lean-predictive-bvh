@@ -15,3 +15,4 @@
 # SUMO simulation output
 sumo-sim/*.csv
 sumo-sim/*.xml
+.DS_Store
