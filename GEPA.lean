@@ -60,6 +60,25 @@ theorem dominates_irrefl {S : Type} [LinearOrder S] (f : Fitness S) :
   rintro ⟨-, -, -, -, -, -, -, h | h | h | h | h | h | h⟩ <;>
     exact absurd h (lt_irrefl _)
 
+-- Dominance is transitive.
+theorem dominates_trans {S : Type} [LinearOrder S] {f₁ f₂ f₃ : Fitness S}
+    (h12 : dominates f₁ f₂) (h23 : dominates f₂ f₃) : dominates f₁ f₃ := by
+  obtain ⟨ge1, ge2, ge3, ge4, ge5, ge6, ge7, hlt⟩ := h12
+  obtain ⟨ge1', ge2', ge3', ge4', ge5', ge6', ge7', -⟩ := h23
+  refine ⟨le_trans ge1' ge1, le_trans ge2' ge2, le_trans ge3' ge3,
+          le_trans ge4' ge4, le_trans ge5' ge5, le_trans ge6' ge6,
+          le_trans ge7' ge7, ?_⟩
+  -- hlt : f₁.x > f₂.x = f₂.x < f₁.x; ge_i' : f₃.x ≤ f₂.x
+  -- lt_of_le_of_lt : a ≤ b → b < c → a < c  ⟹  f₃.x < f₁.x = f₁.x > f₃.x
+  rcases hlt with hlt | hlt | hlt | hlt | hlt | hlt | hlt
+  · exact Or.inl (lt_of_le_of_lt ge1' hlt)
+  · exact Or.inr (Or.inl (lt_of_le_of_lt ge2' hlt))
+  · exact Or.inr (Or.inr (Or.inl (lt_of_le_of_lt ge3' hlt)))
+  · exact Or.inr (Or.inr (Or.inr (Or.inl (lt_of_le_of_lt ge4' hlt))))
+  · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inl (lt_of_le_of_lt ge5' hlt)))))
+  · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl (lt_of_le_of_lt ge6' hlt))))))
+  · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (lt_of_le_of_lt ge7' hlt))))))
+
 -- Dominance is asymmetric.
 theorem dominates_asymm {S : Type} [LinearOrder S] {f₁ f₂ : Fitness S}
     (h12 : dominates f₁ f₂) (h21 : dominates f₂ f₁) : False := by
@@ -94,15 +113,23 @@ theorem paretoOptimal_singleton {S : Type} [LinearOrder S] (f : Fitness S) :
   simp [isParetoOptimal]
 
 -- Updating the archive (filter dominated entries, insert non-dominated candidate)
--- preserves Pareto optimality.  Parameterised over the filtered list so the
--- axiom avoids requiring a Decidable instance for `dominates`.
-axiom paretoUpdate_optimal {S : Type} [LinearOrder S]
+-- preserves Pareto optimality.  Parameterised over the filtered list to avoid
+-- requiring a Decidable instance for `dominates`.
+theorem paretoUpdate_optimal {S : Type} [LinearOrder S]
     (archive filtered : List (Fitness S)) (f : Fitness S)
     (h_filter   : ∀ f' ∈ filtered, f' ∈ archive ∧ ¬ dominates f f')
     (h_complete : ∀ f' ∈ archive, ¬ dominates f f' → f' ∈ filtered)
     (h_opt      : isParetoOptimal archive)
     (h_new      : ∀ f' ∈ archive, ¬ dominates f' f) :
-    isParetoOptimal (f :: filtered)
+    isParetoOptimal (f :: filtered) := by
+  intro f₁ hf₁ f₂ hf₂ hne
+  simp [List.mem_cons] at hf₁ hf₂
+  rcases hf₁ with rfl | hf₁ <;> rcases hf₂ with rfl | hf₂
+  · exact absurd rfl hne
+  · exact (h_filter f₂ hf₂).2
+  · intro hdom
+    exact h_new f₁ (h_filter f₁ hf₁).1 hdom
+  · exact h_opt f₁ (h_filter f₁ hf₁).1 f₂ (h_filter f₂ hf₂).1 hne
 
 -- ---------------------------------------------------------------------------
 -- § 3  Generation counter monotonicity
@@ -225,7 +252,12 @@ theorem bestCandidate_maximal {S : Type} [Preorder S]
     s ≤ ws :=
   h.2 c s hc
 
--- Accepting a proposed candidate only when score ≥ current best is safe.
-theorem accept_iff_improvement {S : Type} [Preorder S] (prev proposed : S)
-    (h : prev ≤ proposed) : prev ≤ proposed :=
-  h
+-- Accepting a proposed candidate only when score ≥ current best preserves
+-- non-decreasingness: appending `proposed` to a non-decreasing history where
+-- every prior score ≤ proposed produces a non-decreasing history.
+theorem accept_preserves_monotonicity {S : Type} [Preorder S]
+    (history : List S) (proposed : S)
+    (h_hist : scoresNonDecreasing history)
+    (h_best : ∀ s ∈ history, s ≤ proposed) :
+    scoresNonDecreasing (history ++ [proposed]) :=
+  scores_mono_append history proposed h_hist h_best
