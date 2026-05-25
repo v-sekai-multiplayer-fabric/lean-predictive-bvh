@@ -297,20 +297,16 @@ def connRecordMinSize : Nat := 6
 -- PART 6: STRING ENCODING
 -- ═══════════════════════════════════════════════════════════════════════════
 
-/-- Strings are length-prefixed UTF-8 with 4-byte alignment padding.
-    Padding bytes = (4 - (len % 4)) % 4. -/
-def stringPadding (len : Nat) : Nat :=
-  (4 - len % 4) % 4
-
-theorem stringPadding_range (len : Nat) : stringPadding len < 4 := by
-  unfold stringPadding; omega
-
-/-- Total wire size of a string: 4 (length prefix) + len + padding. -/
+/-- Strings are length-prefixed UTF-8 with NO padding.
+    Length includes the null terminator byte.
+    Source: save_unicode_string stores utf8.length()+1, get_unicode_string reads exactly len bytes.
+    There is NO 4-byte alignment padding on strings in the binary resource format. -/
 def stringWireSize (len : Nat) : Nat :=
-  4 + len + stringPadding len
+  4 + len
 
-theorem stringWireSize_aligned (len : Nat) : stringWireSize len % 4 = 0 := by
-  unfold stringWireSize stringPadding; omega
+/-- Wire size is always at least 4 (the length prefix). -/
+theorem stringWireSize_min (len : Nat) : 4 ≤ stringWireSize len := by
+  unfold stringWireSize; omega
 
 /-- String table references: if bit 31 is set, the remaining bits are an
     inline string length. Otherwise, it's an index into the string table. -/
