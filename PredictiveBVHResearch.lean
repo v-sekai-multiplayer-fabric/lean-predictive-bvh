@@ -13,4 +13,5 @@ import PredictiveBVH.Spatial.Partition
 import PredictiveBVH.Protocol.Saturate
 import PredictiveBVH.Protocol.Fabric
 import PredictiveBVH.Interest.AuthorityInterest
+import PredictiveBVH.Interest.SolveOrder
 import PredictiveBVH.Relativistic.ReBAC
