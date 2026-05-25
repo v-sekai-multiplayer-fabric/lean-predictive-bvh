@@ -32,6 +32,7 @@ import PredictiveBVH.Spatial.HilbertCell
 import PredictiveBVH.Codegen.QuinticHermite
 import PredictiveBVH.Codegen.TreeC
 import PredictiveBVH.Codegen.CodeGen
+import PredictiveBVH.Codegen.GodotBinary
 
 -- Research-tier proofs live in the sibling `PredictiveBVHResearch` lib
 -- (root file: PredictiveBVHResearch.lean). They are not in the codegen
