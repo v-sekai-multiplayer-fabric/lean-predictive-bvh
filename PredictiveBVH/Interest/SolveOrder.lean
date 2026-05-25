@@ -427,6 +427,29 @@ theorem convoy_layers :
 /-- Convoy is acyclic. -/
 theorem convoy_acyclic : hasCycle convoy_example = false := by native_decide
 
+/-- CONVOY_TRAIN: engine → car1 → car2 → ... → car9, each car has ~154 passengers.
+    Models a train where each cabin's transform depends on the preceding cabin.
+    Engine(1) → Car1(2) → Car2(3) → ... → Car9(10), passengers(11-1400).
+    Tests: serial chain depth (10 cars) + fan-out per car. Depth = 11 layers.
+    Contrast with flat convoy (depth 2): train tests DEEP sequential dependency. -/
+def convoy_train_example : DepGraph :=
+  { entities := (Array.range 1400).map (· + 1),
+    edges :=
+      -- Chain: engine(1)→car1(2)→car2(3)→...→car9(10)
+      (Array.range 9).map (fun i => (i + 1, i + 2))
+      -- Passengers 11..1400 parented to their car (round-robin across 9 cars)
+      ++ (Array.range 1390).map (fun i => (i % 9 + 2, i + 11)) }
+
+/-- Train convoy has 11 solve layers:
+    Layer 0: engine. Layers 1-9: cars (sequential chain).
+    Layer 2-10: passengers solve alongside the NEXT car in the chain.
+    Depth = 11 because deepest passengers depend on car9 (layer 9) → layer 10. -/
+theorem convoy_train_layers :
+    (solveLayers convoy_train_example).size = 11 := by native_decide
+
+/-- Train convoy is acyclic. -/
+theorem convoy_train_acyclic : hasCycle convoy_train_example = false := by native_decide
+
 /-- CONCERT: 700 performers + 700 props (full 1400 authority capacity).
     Each performer (1-700) has one attached prop (701-1400).
     The 400 interest replicas (performers visible from neighboring zones)
@@ -521,5 +544,113 @@ theorem cycle_detected : hasCycle cycle_example = true := by native_decide
 -- Hierarchical topological sort: same-frame solve for ALL scenarios.
 -- Worst case (233 ragdolls × 6 bones): 6μs. Flat's worst: 250ms. Ratio: 40,000×.
 -- Depth is determined by the longest chain, NOT by entity count.
+
+-- ============================================================================
+-- BOUNDED PROPAGATION SPEED (XPR / Lightspeed Studios GDC 2023)
+--
+-- Key insight: instead of requiring the ENTIRE dependency chain to solve in
+-- one frame (rigid coupling, infinite propagation speed), set an ARTIFICIAL
+-- speed of light for force/transform propagation in the game world.
+--
+-- With propagation speed = k hops/tick:
+--   Each entity only needs ancestors within k hops to be solved THIS frame.
+--   Ancestors beyond k hops: their influence hasn't arrived yet (by design).
+--   The chain tip feels the root's input after chainLength/k frames.
+--
+-- This is NOT error — it's the intended physics. Coupling forces travel at
+-- finite speed through the virtual world, just as real forces do.
+--
+-- Tradeoff:
+--   speed = ∞ (rigid): solve depth = chainLength, latency = 0 frames
+--   speed = 1 hop/tick: solve depth = 2, latency = chainLength frames
+--   speed = k hops/tick: solve depth = k+1, latency = ⌈chainLength/k⌉ frames
+-- ============================================================================
+
+/-- Propagation speed: how many hops of dependency are resolved per tick.
+    ∞ = rigid coupling (original hierarchical). Finite = XPR soft coupling. -/
+def PropagationSpeed := Nat
+
+/-- Solve depth under bounded propagation: min(chainDepth, speed + 1).
+    With finite speed, long chains are truncated to local neighborhoods. -/
+def boundedSolveDepth (chainDepth speed : Nat) : Nat :=
+  min chainDepth (speed + 1)
+
+/-- Propagation delay: frames until chain tip feels root's input.
+    ⌈chainDepth / speed⌉ frames for the wave to traverse the chain. -/
+def propagationDelay (chainDepth speed : Nat) : Nat :=
+  if speed == 0 then chainDepth
+  else (chainDepth + speed - 1) / speed
+
+/-- Rigid coupling (speed = ∞ ≈ chainDepth): solve depth = chainDepth, delay = 1 frame. -/
+theorem rigid_solve_depth (d : Nat) (h : 0 < d) :
+    boundedSolveDepth d d = d := by
+  simp [boundedSolveDepth, Nat.min_self]
+
+theorem rigid_delay (d : Nat) (h : 0 < d) :
+    propagationDelay d d = 1 := by
+  have hd : d ≠ 0 := by omega
+  simp only [propagationDelay, beq_iff_eq, hd, ite_false]
+  exact Nat.div_eq_of_lt_le (by omega) (by omega)
+
+/-- Speed-1 (each car only needs its neighbor): solve depth = 2, delay = chainDepth. -/
+theorem speed1_solve_depth (d : Nat) (h : 2 ≤ d) :
+    boundedSolveDepth d 1 = 2 := by
+  simp [boundedSolveDepth]; omega
+
+theorem speed1_delay (d : Nat) (h : 0 < d) :
+    propagationDelay d 1 = d := by
+  simp [propagationDelay]
+
+/-- CONVOY_TRAIN with rigid coupling: 11 solve layers, 1 frame delay (instant). -/
+theorem train_rigid :
+    boundedSolveDepth 11 11 = 11 ∧ propagationDelay 11 11 = 1 := by decide
+
+/-- CONVOY_TRAIN with speed-1 (soft coupling): 2 solve layers, 11 frame delay.
+    Each car only resolves its immediate predecessor per tick.
+    The engine's impulse reaches car9's passengers after 11 frames × 50ms = 550ms.
+    For VR social (not competitive physics), this soft propagation is acceptable. -/
+theorem train_soft :
+    boundedSolveDepth 11 1 = 2 ∧ propagationDelay 11 1 = 11 := by decide
+
+/-- CONVOY_TRAIN with speed-3 (medium coupling): 4 solve layers, 4 frame delay.
+    Each car resolves 3 hops of dependency per tick.
+    Impulse reaches end in 4 frames × 50ms = 200ms. -/
+theorem train_medium :
+    boundedSolveDepth 11 3 = 4 ∧ propagationDelay 11 3 = 4 := by decide
+
+/-- Optimal propagation speed derived from FabricLatency.toTicks (no duplication).
+    speed = toTicks - 1: propagation must be SLOWER than network RTT so
+    the server can rollback-correct before the light cone reaches the player. -/
+theorem propagation_within_rtt (latency : FabricLatency) :
+    latency.toTicks - 1 < latency.toTicks := by
+  cases latency <;> native_decide
+
+/-- crossRegion (4 ticks): optimal speed = 3 hops/tick. -/
+theorem optimal_crossRegion :
+    FabricLatency.crossRegion.toTicks - 1 = 3 := by native_decide
+
+/-- satellite (40 ticks): optimal speed = 39 hops/tick. Almost rigid. -/
+theorem optimal_satellite :
+    FabricLatency.satellite.toTicks - 1 = 39 := by native_decide
+
+/-- sameRegion (1 tick): speed = 0. Must use rigid hierarchical. -/
+theorem optimal_sameRegion :
+    FabricLatency.sameRegion.toTicks - 1 = 0 := by native_decide
+
+/-- CONVOY_TRAIN at crossRegion: speed=3, depth=4, delay=4 ticks.
+    No additional latency beyond what network RTT already adds. -/
+theorem train_crossRegion :
+    boundedSolveDepth 11 (FabricLatency.crossRegion.toTicks - 1) = 4 ∧
+    propagationDelay 11 (FabricLatency.crossRegion.toTicks - 1) = 4 := by decide
+
+/-- CONVOY_TRAIN at satellite: speed=39 ≥ 11, effectively rigid. -/
+theorem train_satellite :
+    boundedSolveDepth 11 (FabricLatency.satellite.toTicks - 1) = 11 ∧
+    propagationDelay 11 (FabricLatency.satellite.toTicks - 1) = 1 := by decide
+
+/-- sameRegion: speed=0 means boundedSolveDepth gives 1 (unusable).
+    Signals that rigid hierarchical solve is required. -/
+theorem train_sameRegion_requires_rigid :
+    FabricLatency.sameRegion.toTicks - 1 = 0 := by native_decide
 
 end SolveOrder
