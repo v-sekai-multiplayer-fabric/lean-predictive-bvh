@@ -152,4 +152,46 @@ theorem projectToGreatCircle_on_plane (p v0 v1 : Vec3) :
   simp [projectToGreatCircle, dot, cross]
   ring
 
+-- ── Counterexample: scrambled vertex order breaks containment ────────────────
+-- Four cones at +X, +Y, -X, -Y.  The centroid is at the origin (projected to
+-- +Z for non-degeneracy).  With hull order (+X, +Y, -X, -Y) the polygon is
+-- convex and the centroid is inside.  With scrambled order (+X, -X, +Y, -Y)
+-- the edges cross, normals alternate, and the centroid is OUTSIDE — breaking
+-- the solver (it falls through to projection, which snaps toward the origin).
+
+private def scale := 1000
+
+private def coneX  : Vec3 := { x :=  scale, y :=  0,     z := 0 }
+private def coneY  : Vec3 := { x :=  0,     y :=  scale, z := 0 }
+private def coneMX : Vec3 := { x := -scale, y :=  0,     z := 0 }
+private def coneMY : Vec3 := { x :=  0,     y := -scale, z := 0 }
+private def centroidZ : Vec3 := { x := 0, y := 0, z := scale }
+
+private def mkNormals (vs : Array Vec3) : Array Vec3 :=
+  let n := vs.size
+  (Array.range (n - 1)).map fun i => cross vs[i]! vs[i + 1]!
+
+private def scrambledVerts : Array Vec3 := #[coneX, coneMX, coneY, coneMY]
+private def hullVerts      : Array Vec3 := #[coneX, coneY, coneMX, coneMY]
+
+private def scrambledPoly : ConvexPolygon :=
+  { vertices := scrambledVerts
+    normals  := mkNormals scrambledVerts
+    centroid := centroidZ }
+
+private def hullPoly : ConvexPolygon :=
+  { vertices := hullVerts
+    normals  := mkNormals hullVerts
+    centroid := centroidZ }
+
+/-- Scrambled vertex order breaks containment: the centroid is wrongly rejected.
+    This is the concrete bug that occurs when polygon vertices use the user's
+    input order instead of convex hull order. -/
+theorem scrambled_rejects_centroid :
+    insidePoly centroidZ scrambledPoly = false := by native_decide
+
+/-- Hull vertex order is correct: the centroid is accepted. -/
+theorem hull_accepts_centroid :
+    insidePoly centroidZ hullPoly = true := by native_decide
+
 end PredictiveBVH.SphericalPolygon
