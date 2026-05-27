@@ -330,9 +330,53 @@ def main():
             'joint_roms': joint_roms,
         })
 
+    # Save as SQLite (long format for AutoGluon)
+    import sqlite3
+    db_path = output_path.with_suffix('.db')
+    conn = sqlite3.connect(str(db_path))
+    conn.execute('''CREATE TABLE IF NOT EXISTS rom_samples (
+        body_id INTEGER,
+        gender REAL, age REAL, weight REAL, height REAL,
+        bone_len_0 REAL, bone_len_1 REAL, bone_len_2 REAL, bone_len_3 REAL,
+        bone_len_4 REAL, bone_len_5 REAL, bone_len_6 REAL, bone_len_7 REAL,
+        bone_len_8 REAL, bone_len_9 REAL, bone_len_10 REAL, bone_len_11 REAL,
+        bone_len_12 REAL, bone_len_13 REAL, bone_len_14 REAL,
+        muscle_name TEXT, min_deg REAL, max_deg REAL
+    )''')
+    conn.execute('DELETE FROM rom_samples')
+
+    for body_id, r in enumerate(results):
+        pheno = r.get('phenotypes', {})
+        gender = pheno.get('gender', 0.5)
+        age = pheno.get('age', 30.0)
+        weight_val = pheno.get('weight', 0.0)
+        height_val = pheno.get('height', 0.0)
+        bl = r['bone_lengths']
+        bl_padded = bl + [0.0] * (15 - len(bl))
+
+        for jr in r['joint_roms']:
+            # Each joint has swing1/swing2/twist → 3 muscles
+            name = jr['name']
+            for axis, key in [('Front-Back', 'swing1'), ('In-Out', 'swing2'), ('Twist', 'twist')]:
+                muscle_name = f"{name} {axis}"
+                max_val = jr.get(key, jr.get(f'{key}_max', 0.0))
+                conn.execute(
+                    'INSERT INTO rom_samples VALUES (?,?,?,?,?,' +
+                    ','.join(['?'] * 15) + ',?,?,?)',
+                    [body_id, gender, age, weight_val, height_val] +
+                    bl_padded[:15] +
+                    [muscle_name, -max_val, max_val]  # symmetric for now
+                )
+    conn.commit()
+    total_rows = conn.execute('SELECT COUNT(*) FROM rom_samples').fetchone()[0]
+    conn.close()
+
+    # Also save JSON
     with open(output_path, 'w') as f:
         json.dump(results, f, indent=2)
-    print(f"\nSaved {len(results)} results to {output_path}")
+
+    print(f"\nSaved {total_rows} rows to {db_path} (SQLite long format)")
+    print(f"Saved JSON to {output_path}")
 
 
 if __name__ == "__main__":

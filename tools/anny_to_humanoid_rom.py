@@ -221,9 +221,62 @@ def main():
             }
             print(f"  {muscle_name}: [{neg_limit:.1f}°, +{pos_limit:.1f}°]")
 
+    # Save as SQLite (long format for AutoGluon)
+    import sqlite3
+    db_path = output_path.with_suffix('.db')
+    conn = sqlite3.connect(str(db_path))
+    conn.execute('''CREATE TABLE IF NOT EXISTS rom_samples (
+        body_id INTEGER,
+        gender REAL,
+        age REAL,
+        weight REAL,
+        height REAL,
+        bone_len_0 REAL, bone_len_1 REAL, bone_len_2 REAL, bone_len_3 REAL,
+        bone_len_4 REAL, bone_len_5 REAL, bone_len_6 REAL, bone_len_7 REAL,
+        bone_len_8 REAL, bone_len_9 REAL, bone_len_10 REAL, bone_len_11 REAL,
+        bone_len_12 REAL, bone_len_13 REAL, bone_len_14 REAL,
+        muscle_name TEXT,
+        min_deg REAL,
+        max_deg REAL
+    )''')
+    conn.execute('DELETE FROM rom_samples')
+
+    # Compute bone lengths
+    bone_lengths = []
+    for i in range(15):
+        parent = anny_model.parent_map[i]
+        if parent >= 0:
+            length = float(np.linalg.norm(joint_positions[i] - joint_positions[parent]))
+        else:
+            length = 0.0
+        bone_lengths.append(length)
+
+    body_id = 0
+    # Phenotype values (from the default forward call)
+    gender = 0.5
+    age = 30.0
+    weight_val = 0.0
+    height_val = 0.0
+
+    for muscle_name, limits in results.items():
+        conn.execute(
+            'INSERT INTO rom_samples VALUES (?,?,?,?,?,' +
+            ','.join(['?'] * 15) + ',?,?,?)',
+            [body_id, gender, age, weight_val, height_val] +
+            bone_lengths +
+            [muscle_name, limits['min'], limits['max']]
+        )
+    conn.commit()
+
+    # Also save JSON for reference
     with open(output_path, 'w') as f:
         json.dump(results, f, indent=2)
-    print(f"\nSaved to {output_path}")
+
+    print(f"\nSaved {len(results)} muscles to {db_path} (SQLite)")
+    print(f"Saved JSON to {output_path}")
+    print(f"Schema: body_id, gender, age, weight, height, bone_len_0..14, muscle_name, min_deg, max_deg")
+    print(f"Rows: {len(results)} (1 body × {len(results)} muscles)")
+    conn.close()
 
 
 if __name__ == "__main__":
