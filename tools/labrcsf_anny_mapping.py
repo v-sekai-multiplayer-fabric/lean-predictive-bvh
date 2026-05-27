@@ -80,61 +80,67 @@ LABRCSF_TO_ANNY = {
 }
 
 # DOFs per joint type
-# Most joints: swing_x (front-back), swing_z (left-right), twist_y (along bone)
-# Hinge joints (knee, elbow, fingers): swing_x only + twist_y
-# Ball-and-socket (hip, shoulder): all 3
+# DOF types:
+#   flexion   — bending in the sagittal plane (flex/extend)
+#   abduction — spreading in the frontal plane (abduct/adduct)
+#   rotation  — twist along the bone axis (internal/external)
+#   linear    — translation along the bone axis (extend/retract, prismatic)
+#
+# Every joint has 'linear' for the prismatic/extensor DOF (bone length change).
+# Rotational DOFs vary by joint type.
 JOINT_DOFS = {
-    # Core
-    'Hips':              ['swing_x', 'swing_z', 'twist_y'],
-    'Spine':             ['swing_x', 'swing_z', 'twist_y'],
-    'Chest':             ['swing_x', 'swing_z', 'twist_y'],
-    'Neck':              ['swing_x', 'swing_z', 'twist_y'],
-    'Head':              ['swing_x', 'swing_z', 'twist_y'],
-    'Jaw':               ['swing_x'],
-    'LeftEye':           ['swing_x', 'swing_z'],
-    'RightEye':          ['swing_x', 'swing_z'],
-    # Shoulders: 2 DOF (elevation + protraction)
-    'LeftShoulder':      ['swing_x', 'swing_z'],
-    'RightShoulder':     ['swing_x', 'swing_z'],
-    # Upper arms: ball-and-socket
-    'LeftUpperArm':      ['swing_x', 'swing_z', 'twist_y'],
-    'RightUpperArm':     ['swing_x', 'swing_z', 'twist_y'],
-    # Lower arms: hinge + pronation
-    'LeftLowerArm':      ['swing_x', 'twist_y'],
-    'RightLowerArm':     ['swing_x', 'twist_y'],
-    # Hands: 2 DOF (flex + deviation)
-    'LeftHand':          ['swing_x', 'swing_z'],
-    'RightHand':         ['swing_x', 'swing_z'],
-    # Upper legs: ball-and-socket
-    'LeftUpperLeg':      ['swing_x', 'swing_z', 'twist_y'],
-    'RightUpperLeg':     ['swing_x', 'swing_z', 'twist_y'],
-    # Lower legs: hinge + twist
-    'LeftLowerLeg':      ['swing_x', 'twist_y'],
-    'RightLowerLeg':     ['swing_x', 'twist_y'],
-    # Feet: 2 DOF (dorsi/plantar + inversion)
-    'LeftFoot':          ['swing_x', 'swing_z'],
-    'RightFoot':         ['swing_x', 'swing_z'],
-    # Toes: 1 DOF (flex)
-    'LeftToes':          ['swing_x'],
-    'RightToes':         ['swing_x'],
+    # Core — no linear (rigid bones, not prismatic)
+    'Hips':              ['flexion', 'abduction', 'rotation'],
+    'Spine':             ['flexion', 'abduction', 'rotation', 'linear'],
+    'Chest':             ['flexion', 'abduction', 'rotation', 'linear'],
+    'Neck':              ['flexion', 'abduction', 'rotation'],
+    'Head':              ['flexion', 'abduction', 'rotation'],
+    'Jaw':               ['flexion'],
+    'LeftEye':           ['flexion', 'abduction'],
+    'RightEye':          ['flexion', 'abduction'],
+    # Shoulders: 2 rotational + linear (clavicle can shrug/protract)
+    'LeftShoulder':      ['flexion', 'abduction', 'linear'],
+    'RightShoulder':     ['flexion', 'abduction', 'linear'],
+    # Upper arms: ball-and-socket + linear (upper arm length varies with posture)
+    'LeftUpperArm':      ['flexion', 'abduction', 'rotation', 'linear'],
+    'RightUpperArm':     ['flexion', 'abduction', 'rotation', 'linear'],
+    # Lower arms: hinge + pronation + linear
+    'LeftLowerArm':      ['flexion', 'rotation', 'linear'],
+    'RightLowerArm':     ['flexion', 'rotation', 'linear'],
+    # Hands: 2 rotational (no linear — wrist doesn't telescope)
+    'LeftHand':          ['flexion', 'abduction'],
+    'RightHand':         ['flexion', 'abduction'],
+    # Upper legs: ball-and-socket + linear
+    'LeftUpperLeg':      ['flexion', 'abduction', 'rotation', 'linear'],
+    'RightUpperLeg':     ['flexion', 'abduction', 'rotation', 'linear'],
+    # Lower legs: hinge + twist + linear
+    'LeftLowerLeg':      ['flexion', 'rotation', 'linear'],
+    'RightLowerLeg':     ['flexion', 'rotation', 'linear'],
+    # Feet: 2 rotational (no linear — feet don't telescope)
+    'LeftFoot':          ['flexion', 'abduction'],
+    'RightFoot':         ['flexion', 'abduction'],
+    # Toes: flex only (no linear)
+    'LeftToes':          ['flexion'],
+    'RightToes':         ['flexion'],
 }
 
-# Fingers: all have swing_x (flex) + swing_z (spread, proximal only)
+# Fingers: flexion + abduction (spread, metacarpal/proximal only)
+# No linear — finger bones don't telescope.
 for side in ['Left', 'Right']:
     for finger in ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky']:
         for segment in ['Metacarpal', 'Proximal', 'Intermediate', 'Distal']:
             name = f'{side}{finger}{segment}'
             if name in LABRCSF_TO_ANNY:
                 if segment in ['Metacarpal', 'Proximal']:
-                    JOINT_DOFS[name] = ['swing_x', 'swing_z']
+                    JOINT_DOFS[name] = ['flexion', 'abduction']
                 else:
-                    JOINT_DOFS[name] = ['swing_x']
+                    JOINT_DOFS[name] = ['flexion']
 
 def get_all_joints():
     """Return list of (labrcsf_name, anny_bone, dofs)."""
     result = []
     for labrcsf, anny in LABRCSF_TO_ANNY.items():
-        dofs = JOINT_DOFS.get(labrcsf, ['swing_x', 'swing_z', 'twist_y'])
+        dofs = JOINT_DOFS.get(labrcsf, ['flexion', 'abduction', 'rotation'])
         result.append((labrcsf, anny, dofs))
     return result
 
