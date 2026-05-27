@@ -29,6 +29,7 @@ import PredictiveBVH.Spatial.BucketDir
 import PredictiveBVH.Spatial.HilbertCell
 import PredictiveBVH.Spatial.SphericalPolygon
 import PredictiveBVH.Spatial.KusudamaShader
+import PredictiveBVH.Spatial.KusudamaSolver
 
 -- Code generation pipeline
 import PredictiveBVH.Codegen.QuinticHermite
