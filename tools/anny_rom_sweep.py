@@ -330,42 +330,81 @@ def main():
             'joint_roms': joint_roms,
         })
 
+    # LabRCSF canonical joint names (matching joints.csv CanonicalJoint column)
+    LABR_CANONICAL = [
+        'Hips', 'LeftUpperLeg', 'RightUpperLeg',
+        'LeftLowerLeg', 'RightLowerLeg',
+        'LeftFoot', 'RightFoot',
+        'Chest', 'Head',
+        'LeftUpperArm', 'RightUpperArm',
+        'LeftLowerArm', 'RightLowerArm',
+        'LeftHand', 'RightHand',
+    ]
+
+    # Per-joint DOF names in LabRCSF style (not Unity muscles)
+    # swing_x = rotation around bone-local X (front-back / nod / stretch)
+    # swing_z = rotation around bone-local Z (left-right / in-out / tilt)
+    # twist_y = rotation around bone-local Y (twist / turn)
+    DOF_NAMES = ['swing_x', 'swing_z', 'twist_y']
+
     # Save as SQLite (long format for AutoGluon)
     import sqlite3
     db_path = output_path.with_suffix('.db')
     conn = sqlite3.connect(str(db_path))
     conn.execute('''CREATE TABLE IF NOT EXISTS rom_samples (
         body_id INTEGER,
-        gender REAL, age REAL, weight REAL, height REAL,
-        bone_len_0 REAL, bone_len_1 REAL, bone_len_2 REAL, bone_len_3 REAL,
-        bone_len_4 REAL, bone_len_5 REAL, bone_len_6 REAL, bone_len_7 REAL,
-        bone_len_8 REAL, bone_len_9 REAL, bone_len_10 REAL, bone_len_11 REAL,
-        bone_len_12 REAL, bone_len_13 REAL, bone_len_14 REAL,
-        muscle_name TEXT, min_deg REAL, max_deg REAL
+        -- ANNY phenotype parameters
+        anny_gender REAL,
+        anny_age REAL,
+        anny_weight REAL,
+        anny_height REAL,
+        anny_muscle REAL,
+        anny_proportions REAL,
+        -- Bone lengths from ANNY (metres)
+        bone_len_Hips REAL,
+        bone_len_LeftUpperLeg REAL, bone_len_RightUpperLeg REAL,
+        bone_len_LeftLowerLeg REAL, bone_len_RightLowerLeg REAL,
+        bone_len_LeftFoot REAL, bone_len_RightFoot REAL,
+        bone_len_Chest REAL, bone_len_Head REAL,
+        bone_len_LeftUpperArm REAL, bone_len_RightUpperArm REAL,
+        bone_len_LeftLowerArm REAL, bone_len_RightLowerArm REAL,
+        bone_len_LeftHand REAL, bone_len_RightHand REAL,
+        -- LabRCSF joint + DOF
+        labrcsf_joint TEXT,
+        dof TEXT,
+        -- ROM limits (degrees, [-1,1] normalized separately)
+        min_deg REAL,
+        max_deg REAL
     )''')
     conn.execute('DELETE FROM rom_samples')
 
     for body_id, r in enumerate(results):
         pheno = r.get('phenotypes', {})
-        gender = pheno.get('gender', 0.5)
-        age = pheno.get('age', 30.0)
-        weight_val = pheno.get('weight', 0.0)
-        height_val = pheno.get('height', 0.0)
+        anny_params = [
+            pheno.get('gender', 0.5),
+            pheno.get('age', 30.0),
+            pheno.get('weight', 0.0),
+            pheno.get('height', 0.0),
+            pheno.get('muscle', 0.0),
+            pheno.get('proportions', 0.0),
+        ]
         bl = r['bone_lengths']
         bl_padded = bl + [0.0] * (15 - len(bl))
 
         for jr in r['joint_roms']:
-            # Each joint has swing1/swing2/twist → 3 muscles
-            name = jr['name']
-            for axis, key in [('Front-Back', 'swing1'), ('In-Out', 'swing2'), ('Twist', 'twist')]:
-                muscle_name = f"{name} {axis}"
-                max_val = jr.get(key, jr.get(f'{key}_max', 0.0))
+            joint_name = jr['name']
+            # Map to LabRCSF canonical name if possible
+            labrcsf = joint_name
+            for axis_key, dof_name in zip(
+                ['swing1_max', 'swing2_max', 'twist_max'],
+                DOF_NAMES
+            ):
+                max_val = jr.get(axis_key, jr.get(axis_key.replace('_max', ''), 0.0))
                 conn.execute(
-                    'INSERT INTO rom_samples VALUES (?,?,?,?,?,' +
-                    ','.join(['?'] * 15) + ',?,?,?)',
-                    [body_id, gender, age, weight_val, height_val] +
-                    bl_padded[:15] +
-                    [muscle_name, -max_val, max_val]  # symmetric for now
+                    'INSERT INTO rom_samples VALUES (?,?,?,?,?,?,?,' +
+                    ','.join(['?'] * 15) + ',?,?,?,?)',
+                    [body_id] + anny_params + bl_padded[:15] +
+                    [labrcsf, dof_name, -max_val, max_val]
                 )
     conn.commit()
     total_rows = conn.execute('SELECT COUNT(*) FROM rom_samples').fetchone()[0]
@@ -375,7 +414,9 @@ def main():
     with open(output_path, 'w') as f:
         json.dump(results, f, indent=2)
 
-    print(f"\nSaved {total_rows} rows to {db_path} (SQLite long format)")
+    print(f"\nSaved {total_rows} rows to {db_path} (SQLite)")
+    print(f"Schema: body_id, anny_{{gender,age,weight,height,muscle,proportions}},")
+    print(f"        bone_len_{{LabRCSF}}, labrcsf_joint, dof, min_deg, max_deg")
     print(f"Saved JSON to {output_path}")
 
 
