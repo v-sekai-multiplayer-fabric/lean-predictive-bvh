@@ -1,0 +1,119 @@
+[
+  {
+    "phenotypes": {
+      "gender": 0.7170043587684631,
+      "age": 18.033935546875,
+      "weight": -0.5760878920555115,
+      "height": 0.6453784704208374
+    },
+    "bone_lengths": [
+      0.0,
+      0.14168291829326032,
+      0.14168291829326032,
+      0.4908677319021196,
+      0.4908677319021196,
+      0.47780607495067373,
+      0.47780607495067373,
+      0.18805024656463468,
+      0.5403713650804318,
+      0.38477423729235044,
+      0.38477423729235044,
+      0.2956110561938296,
+      0.2956110561938296,
+      0.2608394848653123,
+      0.2608394848653123
+    ],
+    "joint_roms": [
+      {
+        "name": "Hips",
+        "swing1": 180.0,
+        "swing2": 180.0,
+        "twist": 180.0
+      },
+      {
+        "name": "LeftUpperLeg",
+        "swing1": 0.1,
+        "swing2": 0.0,
+        "twist": 11.3
+      },
+      {
+        "name": "RightUpperLeg",
+        "swing1": 11.2,
+        "swing2": 0.1,
+        "twist": 0.2
+      },
+      {
+        "name": "LeftLowerLeg",
+        "swing1": 33.8,
+        "swing2": 11.2,
+        "twist": 15.5
+      },
+      {
+        "name": "RightLowerLeg",
+        "swing1": 0.0,
+        "swing2": 5.6,
+        "twist": 11.3
+      },
+      {
+        "name": "LeftFoot",
+        "swing1": 2.9,
+        "swing2": 2.8,
+        "twist": 0.4
+      },
+      {
+        "name": "RightFoot",
+        "swing1": 0.2,
+        "swing2": 0.0,
+        "twist": 24.1
+      },
+      {
+        "name": "Chest",
+        "swing1": 2.8,
+        "swing2": 0.1,
+        "twist": 90.0
+      },
+      {
+        "name": "Head",
+        "swing1": 0.0,
+        "swing2": 3.2,
+        "twist": 0.2
+      },
+      {
+        "name": "LeftUpperArm",
+        "swing1": 0.0,
+        "swing2": 1.2,
+        "twist": 1.1
+      },
+      {
+        "name": "RightUpperArm",
+        "swing1": 90.0,
+        "swing2": 90.0,
+        "twist": 0.7
+      },
+      {
+        "name": "LeftLowerArm",
+        "swing1": 2.8,
+        "swing2": 5.7,
+        "twist": 35.2
+      },
+      {
+        "name": "RightLowerArm",
+        "swing1": 22.9,
+        "swing2": 112.5,
+        "twist": 0.0
+      },
+      {
+        "name": "LeftHand",
+        "swing1": 0.4,
+        "swing2": 0.7,
+        "twist": 45.0
+      },
+      {
+        "name": "RightHand",
+        "swing1": 0.0,
+        "swing2": 22.5,
+        "twist": 0.4
+      }
+    ]
+  }
+]
