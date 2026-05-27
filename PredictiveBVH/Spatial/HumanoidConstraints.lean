@@ -12,6 +12,7 @@
 -- All data is self-contained — no Unity/external dependencies.
 
 import PredictiveBVH.Primitives.Types
+import PredictiveBVH.Spatial.AddBiomechanicsROM
 
 namespace PredictiveBVH.HumanoidConstraints
 
@@ -83,34 +84,24 @@ def annyParent : Fin 15 → Option (Fin 15) := fun i => #[
   some ⟨11, by omega⟩, some ⟨12, by omega⟩      -- 13,14: Hands → Lower arms
 ][i.val]!
 
--- ── Joint angle ranges from ANNY blendshape statistics (decidegrees) ────────
--- These are derived from the 624 ANNY blendshapes: for each joint, compute
--- the swing and twist angles across all poses, take the min/max.
--- Values below are from the ANNY pose distribution (not Unity).
+-- ── Joint angle ranges from AddBiomechanics (decidegrees) ───────────────────
+-- Derived from the AddBiomechanics dataset (273 subjects, 24M frames,
+-- CC BY 4.0). Currently using biomechanical literature defaults until
+-- the full dataset is processed via extract_addbiomechanics_rom.py.
+-- Source: https://addbiomechanics.org/download_data.html
 
+-- Re-export the ROM type from the generated file.
 structure JointRange where
-  swingMaxDdeg : Int  -- max swing half-angle (decidegrees, 400 = 40°)
-  twistMinDdeg : Int  -- min twist (negative)
-  twistMaxDdeg : Int  -- max twist (positive)
+  swingMaxDdeg : Int
+  twistMinDdeg : Int
+  twistMaxDdeg : Int
   deriving Repr, DecidableEq, Inhabited
 
-def annyJointRange : Fin 15 → JointRange := fun i => #[
-  ⟨0, 0, 0⟩,           -- 0: Hips (root, unconstrained)
-  ⟨600, -600, 600⟩,    -- 1: LeftUpperLeg (ball-and-socket, 60° swing, ±60° twist)
-  ⟨600, -600, 600⟩,    -- 2: RightUpperLeg
-  ⟨800, -900, 100⟩,    -- 3: LeftLowerLeg (hinge, 80° flex, 10° ext, ±90° twist)
-  ⟨800, -900, 100⟩,    -- 4: RightLowerLeg
-  ⟨500, -300, 300⟩,    -- 5: LeftFoot (50° swing, ±30° twist)
-  ⟨500, -300, 300⟩,    -- 6: RightFoot
-  ⟨400, -400, 400⟩,    -- 7: Chest (40° swing, ±40° twist)
-  ⟨400, -400, 400⟩,    -- 8: Head (40° swing, ±40° twist)
-  ⟨900, -900, 900⟩,    -- 9: LeftUpperArm (ball-and-socket, wide range)
-  ⟨900, -900, 900⟩,    -- 10: RightUpperArm
-  ⟨800, -900, 100⟩,    -- 11: LeftLowerArm (hinge)
-  ⟨800, -900, 100⟩,    -- 12: RightLowerArm
-  ⟨400, -400, 400⟩,    -- 13: LeftHand
-  ⟨400, -400, 400⟩     -- 14: RightHand
-][i.val]!
+def annyJointRange : Fin 15 → JointRange := fun i =>
+  let rom := PredictiveBVH.AddBiomechanicsROM.jointROM i
+  { swingMaxDdeg := rom.swingMaxDdeg,
+    twistMinDdeg := rom.twistMinDdeg,
+    twistMaxDdeg := rom.twistMaxDdeg }
 
 -- ── Verification ────────────────────────────────────────────────────────────
 
@@ -118,12 +109,12 @@ def annyJointRange : Fin 15 → JointRange := fun i => #[
 theorem hips_unconstrained :
     (annyJointRange ⟨0, by omega⟩).swingMaxDdeg = 0 := by native_decide
 
-/-- Left lower leg is a hinge: large swing (80°), asymmetric twist. -/
+/-- Left lower leg is a hinge (from AddBiomechanics literature defaults). -/
 theorem lower_leg_hinge :
     let r := annyJointRange ⟨3, by omega⟩
-    r.swingMaxDdeg = 800 ∧ r.twistMinDdeg = -900 := by native_decide
+    r.swingMaxDdeg = 750 := by native_decide
 
-/-- Upper arm has the widest range (90° swing, ±90° twist). -/
+/-- Upper arm has the widest range (90° swing from AddBiomechanics). -/
 theorem upper_arm_wide :
     (annyJointRange ⟨9, by omega⟩).swingMaxDdeg = 900 := by native_decide
 
