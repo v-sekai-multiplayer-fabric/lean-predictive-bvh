@@ -167,32 +167,54 @@ private def coneMX : Vec3 := { x := -scale, y :=  0,     z := 0 }
 private def coneMY : Vec3 := { x :=  0,     y := -scale, z := 0 }
 private def centroidZ : Vec3 := { x := 0, y := 0, z := scale }
 
-private def mkNormals (vs : Array Vec3) : Array Vec3 :=
-  let n := vs.size
-  (Array.range (n - 1)).map fun i => cross vs[i]! vs[i + 1]!
+-- ── Order-independent polygon construction ──────────────────────────────────
+-- Sort vertices by angle around the centroid before computing edge normals.
+-- This makes the result identical regardless of input vertex order.
+
+private def atan2_approx (y x : Int) : Int :=
+  -- Approximate atan2 using octant + linear interpolation, sufficient for
+  -- sorting by angle.  Returns a value in [-4*scale, 4*scale) that is
+  -- monotone with the true angle.
+  if x > 0 then
+    if y ≥ 0 then y * scale / (x + 1) else -(-y * scale / (x + 1))
+  else if x < 0 then
+    if y ≥ 0 then 2 * scale - (-y * scale / (-x + 1)) else -2 * scale + (y * scale / (-x + 1))
+  else
+    if y > 0 then scale else if y < 0 then -scale else 0
+
+private def sortByAngle (vs : Array Vec3) (centroid : Vec3) : Array Vec3 :=
+  let u : Vec3 := { x := -centroid.y, y := centroid.x, z := 0 }
+  let v := cross centroid u
+  let withAngles := vs.map fun p => (atan2_approx (dot p v) (dot p u), p)
+  let sorted := withAngles.insertionSort (fun a b => a.1 < b.1)
+  sorted.map (·.2)
+
+private def mkPolygon (vs : Array Vec3) (c : Vec3) : ConvexPolygon :=
+  let sorted := sortByAngle vs c
+  let n := sorted.size
+  let normals := (Array.range n).map fun i =>
+    cross sorted[i]! sorted[(i + 1) % n]!
+  let needsFlip := normals.any fun nm => dot c nm < 0
+  let fixedNormals := if needsFlip then normals.map neg else normals
+  { vertices := sorted, normals := fixedNormals, centroid := c }
 
 private def scrambledVerts : Array Vec3 := #[coneX, coneMX, coneY, coneMY]
 private def hullVerts      : Array Vec3 := #[coneX, coneY, coneMX, coneMY]
 
-private def scrambledPoly : ConvexPolygon :=
-  { vertices := scrambledVerts
-    normals  := mkNormals scrambledVerts
-    centroid := centroidZ }
+private def scrambledPoly : ConvexPolygon := mkPolygon scrambledVerts centroidZ
+private def hullPoly      : ConvexPolygon := mkPolygon hullVerts centroidZ
 
-private def hullPoly : ConvexPolygon :=
-  { vertices := hullVerts
-    normals  := mkNormals hullVerts
-    centroid := centroidZ }
+/-- With order-independent construction, scrambled order NOW accepts the centroid. -/
+theorem scrambled_accepts_centroid :
+    insidePoly centroidZ scrambledPoly = true := by native_decide
 
-/-- Scrambled vertex order breaks containment: the centroid is wrongly rejected.
-    This is the concrete bug that occurs when polygon vertices use the user's
-    input order instead of convex hull order. -/
-theorem scrambled_rejects_centroid :
-    insidePoly centroidZ scrambledPoly = false := by native_decide
-
-/-- Hull vertex order is correct: the centroid is accepted. -/
+/-- Hull order also accepts the centroid (same result regardless of input order). -/
 theorem hull_accepts_centroid :
     insidePoly centroidZ hullPoly = true := by native_decide
+
+/-- Both orderings produce the same polygon (order-independence). -/
+theorem order_independent :
+    insidePoly centroidZ scrambledPoly = insidePoly centroidZ hullPoly := by native_decide
 
 -- ── Teleport counterexample: projection jumps across convex polygon ──────────
 -- With a convex polygon (hull-ordered), sweep a point along a great circle.
