@@ -80,13 +80,9 @@ private def verifyExchangeOrder (order : Nat) : Bool :=
         exchange x' a' q p == (x, a)
 
 #eval! do
-  let mut ok := true
-  for ord in List.range 5 do
-    let o := ord + 1
-    if !verifyExchangeOrder o then
-      IO.println s!"EXCHANGE ROUNDTRIP order={o}: FAILED"; ok := false
-  if ok then
-    IO.println "EXCHANGE ROUNDTRIP: orders 1-5 all verified"
+  match (List.range 5).find? (fun ord => !verifyExchangeOrder (ord + 1)) with
+  | some ord => IO.println s!"EXCHANGE ROUNDTRIP order={ord + 1}: FAILED"
+  | none => IO.println "EXCHANGE ROUNDTRIP: orders 1-5 all verified"
 
 -- ── Stage 3: Single fixup step ──────────────────────────────────────────────
 -- Forward fixup builds t by scanning MSB→LSB:
@@ -233,14 +229,9 @@ private def verifyFixupOrder (order : Nat) : Bool :=
     t' == t
 
 #eval! do
-  let mut ok := true
-  for ord in List.range 10 do
-    let o := ord + 1
-    if !verifyFixupOrder o then
-      IO.println s!"FIXUP ROUNDTRIP order={o}: FAILED"
-      ok := false
-  if ok then
-    IO.println "FIXUP ROUNDTRIP: orders 1-10 all verified"
+  match (List.range 10).find? (fun ord => !verifyFixupOrder (ord + 1)) with
+  | some ord => IO.println s!"FIXUP ROUNDTRIP order={ord + 1}: FAILED"
+  | none => IO.println "FIXUP ROUNDTRIP: orders 1-10 all verified"
 
 -- ── Theorem: roundtrip at order 10 ──────────────────────────────────────────
 -- The algebraic lemmas (gray_roundtrip, exchange_self_inverse, xor_cancel_right)

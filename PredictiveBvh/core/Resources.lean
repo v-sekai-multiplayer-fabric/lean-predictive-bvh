@@ -341,9 +341,8 @@ theorem pack_unpack_roundtrip (i : Intent) :
 /-! ## Part 6: Verification -/
 
 -- Verify built-in resources are well-formed
-#eval do
-  for r in allResources do
-    IO.println s!"Resource: {r.name} (zone-aware: {r.isZoneAware})"
-    IO.println s!"  Fields: {r.fieldNames}"
+#eval allResources.forM fun r => do
+  IO.println s!"Resource: {r.name} (zone-aware: {r.isZoneAware})"
+  IO.println s!"  Fields: {r.fieldNames}"
 
 end PredictiveBVH.Resources
