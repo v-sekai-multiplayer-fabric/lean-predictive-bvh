@@ -1,0 +1,5 @@
+-- SPDX-License-Identifier: MIT
+-- InterestSource — DRIVING port: authority/interest queries in (wired from FabricProtocol).
+--
+-- Port contract stub: define the narrow interface the core depends on and an
+-- adapter implements. Kept at the lowest common denominator across bindings.

@@ -1,0 +1,6 @@
+-- SPDX-License-Identifier: MIT
+-- FabricWire — the integration contract (message format) two ends share over the wire.
+-- Driving when receiving, driven when sending; no shared code, only the format.
+--
+-- Port contract stub: define the narrow interface the core depends on and an
+-- adapter implements. Kept at the lowest common denominator across bindings.

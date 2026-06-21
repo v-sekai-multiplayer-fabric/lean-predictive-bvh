@@ -1,0 +1,6 @@
+-- SPDX-License-Identifier: MIT
+-- BiomechSource — DRIVING port: skeleton + recorded biomechanics samples in.
+-- Adapters: B3DParser, AddBiomechanicsROM, the python tools/.
+--
+-- Port contract stub: define the narrow interface the core depends on and an
+-- adapter implements. Kept at the lowest common denominator across bindings.

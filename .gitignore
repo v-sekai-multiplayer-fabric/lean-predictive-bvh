@@ -16,5 +16,5 @@
 sumo-sim/*.csv
 sumo-sim/*.xml
 .DS_Store
-tools/__pycache__/
-tools/anny_rom_test.json
+HumanoidRom/adapters/tools/__pycache__/
+HumanoidRom/adapters/tools/anny_rom_test.json

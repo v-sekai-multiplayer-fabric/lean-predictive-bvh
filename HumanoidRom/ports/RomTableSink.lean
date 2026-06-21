@@ -1,0 +1,6 @@
+-- SPDX-License-Identifier: MIT
+-- RomTableSink — DRIVEN port: computed range-of-motion tables out.
+-- Adapters: ROMTool (file), KusudamaShader (GPU).
+--
+-- Port contract stub: define the narrow interface the core depends on and an
+-- adapter implements. Kept at the lowest common denominator across bindings.

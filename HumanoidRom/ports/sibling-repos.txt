@@ -1,0 +1,3 @@
+# HumanoidRom/ports — sibling wiring declared per the hexagonal convention
+# wire: Shared — common primitive types
+# wire: swing-twist-kusudama / kusudama-constraint-godot — sibling IK repos over the constraint wire

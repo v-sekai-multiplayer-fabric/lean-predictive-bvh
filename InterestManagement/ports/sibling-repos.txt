@@ -1,0 +1,3 @@
+# InterestManagement/ports — sibling wiring declared per the hexagonal convention
+# wire: FabricProtocol — interest queries source
+# wire: Rebac — authority decisions

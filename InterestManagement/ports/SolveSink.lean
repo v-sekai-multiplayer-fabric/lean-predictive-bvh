@@ -1,0 +1,5 @@
+-- SPDX-License-Identifier: MIT
+-- SolveSink — DRIVEN port: solve-order output out to the simulation step.
+--
+-- Port contract stub: define the narrow interface the core depends on and an
+-- adapter implements. Kept at the lowest common denominator across bindings.

@@ -13,25 +13,38 @@ require «truth_research_zk» from git
 require LeanSlang from git
   "https://github.com/V-Sekai-fire/lean-slang.git" @ "v0.0.5"
 
+-- ── Hexagon clusters (core/ports/adapters per the hexagonal convention) ───────
+-- Each cluster is a lean_lib rooted at its aggregator file (e.g. PredictiveBvh.lean),
+-- which imports that cluster's module closure. The old monolithic `PredictiveBVH`
+-- library was split into these along the dependency seams.
 
-lean_lib «PredictiveBVH» where
-  roots := #[`PredictiveBVH]
+-- Shared primitive types (the common vocabulary every core builds on).
+lean_lib Shared where
+  roots := #[`Shared]
 
-lean_lib Lasso where
-  roots := #[`Lasso.Mapping, `Lasso.InputDelivery]
+-- The predictive spatial-oracle hexagon (ghost expansion + SAH + broadphase).
+lean_lib PredictiveBvh where
+  roots := #[`PredictiveBvh]
 
-lean_lib WorkQueue where
-  roots := #[`WorkQueue.Reachability]
+-- Humanoid range-of-motion / IK-constraint hexagon.
+lean_lib HumanoidRom where
+  roots := #[`HumanoidRom]
 
--- Research-tier proofs (Spatial.{Partition, Tree, RefitIncremental},
--- Protocol.{Saturate, Fabric}, Interest.AuthorityInterest,
--- Relativistic.ReBAC). Module sources live under `PredictiveBVH/` alongside
--- production files; this aggregator pins the research-tier import closure.
-lean_lib «PredictiveBVHResearch» where
-  roots := #[`PredictiveBVHResearch]
+-- Fabric networking / SLA hexagon.
+lean_lib FabricProtocol where
+  roots := #[`FabricProtocol]
 
--- AmoLean C code generator: writes thirdparty/predictive_bvh/predictive_bvh.h
+-- Authority-interest / solve-order hexagon.
+lean_lib InterestManagement where
+  roots := #[`InterestManagement]
+
+-- Relationship-based access-control hexagon (NoGod / ReBAC).
+lean_lib Rebac where
+  roots := #[`Rebac]
+
+-- AmoLean C code generator: writes thirdparty/predictive_bvh/predictive_bvh.h.
+-- Lives in the predictive-bvh adapters layer (a driven C-header sink).
 @[default_target]
 lean_exe «bvh-codegen» where
-  root := `PredictiveBVH.Codegen.CodeGen
+  root := `PredictiveBvh.adapters.CodeGen
   supportInterpreter := true

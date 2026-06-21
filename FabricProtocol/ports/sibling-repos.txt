@@ -1,0 +1,3 @@
+# FabricProtocol/ports — sibling wiring declared per the hexagonal convention
+# wire: Shared
+# wire: connection-fsm / http3-queue — the transport siblings on the /fabric wire
