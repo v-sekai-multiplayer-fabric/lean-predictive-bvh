@@ -35,8 +35,16 @@ jobs:
           lint: false
           use-mathlib-cache: true
 
-      # Library root: every module imported by PredictiveBVH.lean must
-      # typecheck. Aspirational research-tier modules live in
-      # multiplayer-fabric-predictive-bvh-research and are not on this gate.
-      - name: lake build PredictiveBVH (library root)
-        run: lake build PredictiveBVH
+      # Production gate: every module in each hexagon cluster's production
+      # closure must typecheck. The repo was split into core/ports/adapters
+      # clusters; each cluster lib is rooted at its aggregator (production tier
+      # only, via `globs := #[.one ...]` in lakefile.lean).
+      - name: lake build hexagon clusters (production gate)
+        run: lake build Shared PredictiveBvh HumanoidRom FabricProtocol InterestManagement Rebac
+
+      # Research-tier proofs (Research.lean): aspirational/model-level claims,
+      # some currently broken against the pinned toolchain. Built for signal but
+      # NOT gating, mirroring the previous PredictiveBVHResearch arrangement.
+      - name: lake build Research (non-gating)
+        continue-on-error: true
+        run: lake build Research

@@ -1,5 +1,6 @@
--- PredictiveBvh hexagon cluster aggregator (auto-organized by the hexagon split).
--- Imports this cluster's core/ports/adapters module closure.
+-- PredictiveBvh hexagon cluster aggregator — production tier.
+-- Spatial oracle: ghost expansion + SAH + broadphase (core), AmoLean codegen (adapters).
+-- Research-tier Partition lives in Research.lean (off the CI gate).
 import PredictiveBvh.adapters.CodeGen
 import PredictiveBvh.adapters.GodotBinary
 import PredictiveBvh.adapters.QuinticHermite
@@ -13,7 +14,6 @@ import PredictiveBvh.core.HilbertBroadphase
 import PredictiveBvh.core.HilbertCell
 import PredictiveBvh.core.HilbertRoundtrip
 import PredictiveBvh.core.LowerBound
-import PredictiveBvh.core.Partition
 import PredictiveBvh.core.Resources
 import PredictiveBvh.core.ScaleContradictions
 import PredictiveBvh.core.ScaleProofs

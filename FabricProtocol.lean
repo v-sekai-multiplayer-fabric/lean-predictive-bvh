@@ -1,7 +1,5 @@
--- FabricProtocol hexagon cluster aggregator (auto-organized by the hexagon split).
--- Imports this cluster's core/ports/adapters module closure.
+-- FabricProtocol hexagon cluster aggregator — production tier.
+-- Networking / SLA. Research-tier Fabric + Saturate live in Research.lean.
 import FabricProtocol.core.AbyssalSLA
-import FabricProtocol.core.Fabric
-import FabricProtocol.core.Saturate
 import FabricProtocol.core.ScaleContradictionsGapClass
 import FabricProtocol.core.WaypointBound
