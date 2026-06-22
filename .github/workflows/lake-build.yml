@@ -20,20 +20,34 @@ jobs:
         with:
           submodules: recursive
 
-      # Default target = the bvh-codegen exe per lakefile.lean. This is the
-      # production-relevant signal: it's what writes predictive_bvh.h.
+      # Setup-only pass: install the toolchain, fetch the Mathlib cache, and
+      # resolve+clone the full dependency graph by building a PURE-LEAN target
+      # (`Shared`). Lake clones every manifest package during resolution, so
+      # this materializes .lake/packages/LeanSlang without triggering its native
+      # FFI (the slangShimO/extern_lib only builds when an exe is linked).
       #
-      # use-mathlib-cache: false — Mathlib is pulled in transitively via
-      # truth_research_zk but we don't actually depend on its olean cache,
-      # and lean-action's auto-detection otherwise tries to fetch it
-      # through `lake exe cache get`, which has been intermittently broken
-      # upstream (corrupt leantar tarball as of 2026-04-25).
-      - name: lake build (default target)
+      # This step must run BEFORE the Slang SDK is vendored: LeanSlang depends on
+      # it being checked out, but we can't fetch the SDK until the package exists.
+      - name: setup toolchain + cache + clone deps (pure-Lean Shared)
         uses: leanprover/lean-action@v1
         with:
+          build-args: "Shared"
           test: false
           lint: false
           use-mathlib-cache: true
+
+      # LeanSlang's main carries an in-process libslang FFI: ffi/slang_shim.cpp
+      # `#include "slang.h"`, built into an extern_lib that Lake force-links into
+      # any downstream executable (here, bvh-codegen). The Slang SDK is gitignored
+      # in LeanSlang (see vendor/fetch.sh); fetch it before building the exe.
+      - name: vendor the Slang SDK for LeanSlang's libslang FFI
+        run: bash .lake/packages/LeanSlang/vendor/fetch.sh
+
+      # Default target = the bvh-codegen exe per lakefile.lean. This is the
+      # production-relevant signal: it's what writes predictive_bvh.h. Needs the
+      # vendored SDK above to compile + link LeanSlang's slang_shim.
+      - name: lake build (default target)
+        run: lake build
 
       # Production gate: every module in each hexagon cluster's production
       # closure must typecheck. The repo was split into core/ports/adapters

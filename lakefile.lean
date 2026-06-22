@@ -8,10 +8,10 @@ package «optimal-partition» where
 
 -- Dependency for flat ECS-style E-node and E-class storage patterns
 require «truth_research_zk» from git
-  "https://github.com/V-Sekai-fire/truth_research_zk.git" @ "mathlib-v4.30"
+  "https://github.com/V-Sekai-fire/truth_research_zk.git" @ "main"
 
 require LeanSlang from git
-  "https://github.com/V-Sekai-fire/lean-slang.git" @ "mathlib-v4.30"
+  "https://github.com/V-Sekai-fire/lean-slang.git" @ "main"
 
 -- ── Hexagon clusters (core/ports/adapters per the hexagonal convention) ───────
 -- Each cluster is a lean_lib rooted at its aggregator file (e.g. PredictiveBvh.lean),
